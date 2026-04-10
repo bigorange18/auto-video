@@ -10,6 +10,7 @@
 - 通过 GitHub Actions 定时执行并产出结果文件
 - 每天自动推送结果到飞书
 - 每天自动推送结果到微信
+- 自动创建微信公众号图文草稿
 
 ## 目录
 
@@ -45,6 +46,12 @@ python scripts/foreign_market_digest.py --hours 24 --limit 10 --feishu-webhook "
 python scripts/foreign_market_digest.py --hours 24 --limit 10 --pushplus-token "$PUSHPLUS_TOKEN"
 ```
 
+创建微信公众号草稿：
+
+```bash
+python scripts/foreign_market_digest.py --hours 24 --limit 10 --wechat-app-id "$WECHAT_APP_ID" --wechat-app-secret "$WECHAT_APP_SECRET" --wechat-author "你的公众号作者名"
+```
+
 默认输出：
 
 - `output/foreign_market_hotspots.json`
@@ -70,7 +77,7 @@ python scripts/foreign_market_digest.py --hours 24 --limit 10 --pushplus-token "
 触发方式：
 
 - 手动触发：`workflow_dispatch`
-- 定时触发：每天 UTC `01:00`
+- 定时触发：每天 UTC `07:30`
 
 执行完成后，结果会作为 Actions artifact 上传。
 
@@ -92,3 +99,24 @@ python scripts/foreign_market_digest.py --hours 24 --limit 10 --pushplus-token "
 - `FEISHU_WEBHOOK_URL`
 
 脚本会在生成日报后，自动把摘要、热点清单、标题建议和社媒文案以飞书卡片消息推送到机器人。
+
+## 微信公众号配置
+
+如果你要把内容同步到微信公众号后台草稿箱，需要在 GitHub 中配置：
+
+- `WECHAT_APP_ID`
+- `WECHAT_APP_SECRET`
+
+可选变量：
+
+- `WECHAT_AUTHOR`
+
+配置路径：`Settings -> Secrets and variables -> Actions`
+
+脚本会自动：
+
+- 获取公众号 `access_token`
+- 上传默认封面图
+- 创建一篇图文草稿到公众号后台
+
+创建完成后，你可以在微信公众号后台的草稿箱中查看并决定是否群发。

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import re
@@ -22,6 +23,30 @@ DEFAULT_OUTPUT_JSON = Path("output/foreign_market_hotspots.json")
 DEFAULT_OUTPUT_MD = Path("output/foreign_market_copy.md")
 GOOGLE_NEWS_BASE = "https://news.google.com/rss/search"
 PUSHPLUS_URL = "https://www.pushplus.plus/send"
+WECHAT_ACCESS_TOKEN_URL = "https://api.weixin.qq.com/cgi-bin/token"
+WECHAT_ADD_DRAFT_URL = "https://api.weixin.qq.com/cgi-bin/draft/add"
+WECHAT_ADD_MATERIAL_URL = "https://api.weixin.qq.com/cgi-bin/material/add_material"
+DEFAULT_WECHAT_AUTHOR = "Auto Video"
+DEFAULT_WECHAT_COVER_PNG_BASE64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAlgAAADICAIAAAC7/QjhAAAACXBIWXMAAAsSAAALEgHS3X78AAAF"
+    "hUlEQVR4nO3VMQ0AAAjDMOZfNHIx4C8E2XQK6JqZmZkBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP4GAb8AAe2y"
+    "4UAAAAAASUVORK5CYII="
+)
 
 FEEDS = [
     {
@@ -86,6 +111,12 @@ def fetch_text(url: str) -> str:
     request = Request(url, headers={"User-Agent": USER_AGENT})
     with urlopen(request, timeout=20) as response:
         return response.read().decode("utf-8")
+
+
+def fetch_json(url: str) -> dict:
+    request = Request(url, headers={"User-Agent": USER_AGENT})
+    with urlopen(request, timeout=20) as response:
+        return json.loads(response.read().decode("utf-8"))
 
 
 def clean_text(value: str | None) -> str:
@@ -379,6 +410,63 @@ def post_json(url: str, payload: dict) -> None:
         response.read()
 
 
+def post_json_and_read(url: str, payload: dict) -> dict:
+    request = Request(
+        url,
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers={
+            "User-Agent": USER_AGENT,
+            "Content-Type": "application/json; charset=utf-8",
+        },
+        method="POST",
+    )
+    with urlopen(request, timeout=20) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def html_escape(value: str) -> str:
+    return (
+        value.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def create_multipart_body(fields: dict[str, str], file_field: str, file_name: str, file_bytes: bytes, content_type: str) -> tuple[bytes, str]:
+    boundary = f"----AutoVideoBoundary{datetime.now(timezone.utc).timestamp():.0f}"
+    body = bytearray()
+    for name, value in fields.items():
+        body.extend(f"--{boundary}\r\n".encode("utf-8"))
+        body.extend(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"))
+        body.extend(value.encode("utf-8"))
+        body.extend(b"\r\n")
+    body.extend(f"--{boundary}\r\n".encode("utf-8"))
+    body.extend(
+        f'Content-Disposition: form-data; name="{file_field}"; filename="{file_name}"\r\n'.encode("utf-8")
+    )
+    body.extend(f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"))
+    body.extend(file_bytes)
+    body.extend(b"\r\n")
+    body.extend(f"--{boundary}--\r\n".encode("utf-8"))
+    return bytes(body), boundary
+
+
+def post_multipart(url: str, fields: dict[str, str], file_field: str, file_name: str, file_bytes: bytes, content_type: str) -> dict:
+    body, boundary = create_multipart_body(fields, file_field, file_name, file_bytes, content_type)
+    request = Request(
+        url,
+        data=body,
+        headers={
+            "User-Agent": USER_AGENT,
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+        },
+        method="POST",
+    )
+    with urlopen(request, timeout=30) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
 def push_to_feishu(payload: dict, webhook_url: str) -> None:
     try:
         post_json(webhook_url, build_feishu_message(payload))
@@ -392,13 +480,14 @@ def build_pushplus_payload(payload: dict, token: str) -> dict:
     markdown_lines = [
         f"# 海外热点股市日报",
         "",
+        "## 结论",
         f"> {payload['summary']}",
         "",
-        "## 标题建议",
+        "## 标题",
     ]
     for title in payload["headline_candidates"][:3]:
         markdown_lines.append(f"- {title}")
-    markdown_lines.extend(["", "## 热点清单"])
+    markdown_lines.extend(["", "## 热点"])
     for index, article in enumerate(payload["articles"][:5], start=1):
         markdown_lines.append(
             f"{index}. **[{article['region']}/{article['theme']}]** {article['title']}"
@@ -422,6 +511,88 @@ def push_to_pushplus(payload: dict, token: str) -> None:
         raise RuntimeError(f"PushPlus push failed with status {exc.code}") from exc
     except urllib.error.URLError as exc:
         raise RuntimeError(f"PushPlus push failed: {exc.reason}") from exc
+
+
+def get_wechat_access_token(app_id: str, app_secret: str) -> str:
+    url = f"{WECHAT_ACCESS_TOKEN_URL}?grant_type=client_credential&appid={quote(app_id)}&secret={quote(app_secret)}"
+    response = fetch_json(url)
+    access_token = response.get("access_token")
+    if access_token:
+        return access_token
+    raise RuntimeError(f"WeChat access token failed: {response}")
+
+
+def build_wechat_cover_bytes() -> bytes:
+    return base64.b64decode(DEFAULT_WECHAT_COVER_PNG_BASE64)
+
+
+def upload_wechat_cover(access_token: str) -> str:
+    url = f"{WECHAT_ADD_MATERIAL_URL}?access_token={quote(access_token)}&type=image"
+    response = post_multipart(
+        url,
+        fields={},
+        file_field="media",
+        file_name="market-cover.png",
+        file_bytes=build_wechat_cover_bytes(),
+        content_type="image/png",
+    )
+    media_id = response.get("media_id")
+    if media_id:
+        return media_id
+    raise RuntimeError(f"WeChat cover upload failed: {response}")
+
+
+def build_wechat_article_content(payload: dict) -> str:
+    parts = [
+        f"<h1>{html_escape('海外热点股市日报')}</h1>",
+        f"<p><strong>结论：</strong>{html_escape(payload['summary'])}</p>",
+        "<h2>标题建议</h2>",
+        "<ul>",
+    ]
+    for title in payload["headline_candidates"][:3]:
+        parts.append(f"<li>{html_escape(title)}</li>")
+    parts.extend(["</ul>", "<h2>热点清单</h2>"])
+    for index, article in enumerate(payload["articles"][:5], start=1):
+        parts.append(
+            f"<p><strong>{index}. [{html_escape(article['region'])}/{html_escape(article['theme'])}]</strong> {html_escape(article['title'])}<br/>"
+            f"热度分：{article['score']} | 来源：{html_escape(article['source'])}<br/>"
+            f"<a href=\"{html_escape(article['link'])}\">查看原文</a></p>"
+        )
+    parts.extend(
+        [
+            "<h2>社媒文案</h2>",
+            f"<p>{html_escape(payload['social_post'])}</p>",
+        ]
+    )
+    return "".join(parts)
+
+
+def build_wechat_draft_payload(payload: dict, author: str, thumb_media_id: str) -> dict:
+    return {
+        "articles": [
+            {
+                "title": "海外热点股市日报",
+                "author": author,
+                "digest": payload["summary"],
+                "content": build_wechat_article_content(payload),
+                "content_source_url": "",
+                "thumb_media_id": thumb_media_id,
+                "need_open_comment": 0,
+                "only_fans_can_comment": 0,
+            }
+        ]
+    }
+
+
+def create_wechat_draft(payload: dict, app_id: str, app_secret: str, author: str) -> str:
+    access_token = get_wechat_access_token(app_id, app_secret)
+    thumb_media_id = upload_wechat_cover(access_token)
+    url = f"{WECHAT_ADD_DRAFT_URL}?access_token={quote(access_token)}"
+    response = post_json_and_read(url, build_wechat_draft_payload(payload, author, thumb_media_id))
+    media_id = response.get("media_id")
+    if media_id:
+        return media_id
+    raise RuntimeError(f"WeChat draft creation failed: {response}")
 
 
 def build_payload(articles: list[Article], hours: int, source_urls: list[str]) -> dict:
@@ -500,6 +671,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-md", type=Path, default=DEFAULT_OUTPUT_MD, help="Output path for generated markdown copy.")
     parser.add_argument("--feishu-webhook", default=os.getenv("FEISHU_WEBHOOK_URL", ""), help="Optional Feishu bot webhook URL.")
     parser.add_argument("--pushplus-token", default=os.getenv("PUSHPLUS_TOKEN", ""), help="Optional PushPlus token for WeChat delivery.")
+    parser.add_argument("--wechat-app-id", default=os.getenv("WECHAT_APP_ID", ""), help="Optional WeChat Official Account app id.")
+    parser.add_argument("--wechat-app-secret", default=os.getenv("WECHAT_APP_SECRET", ""), help="Optional WeChat Official Account app secret.")
+    parser.add_argument("--wechat-author", default=os.getenv("WECHAT_AUTHOR", DEFAULT_WECHAT_AUTHOR), help="WeChat draft author name.")
     return parser.parse_args()
 
 
@@ -518,8 +692,13 @@ def main() -> int:
         push_to_pushplus(payload, args.pushplus_token)
     if args.feishu_webhook:
         push_to_feishu(payload, args.feishu_webhook)
+    wechat_media_id = ""
+    if args.wechat_app_id and args.wechat_app_secret:
+        wechat_media_id = create_wechat_draft(payload, args.wechat_app_id, args.wechat_app_secret, args.wechat_author)
 
     print(f"Wrote {len(articles)} hotspots to {args.output_json} and {args.output_md}")
+    if wechat_media_id:
+        print(f"Created WeChat draft with media_id: {wechat_media_id}")
     return 0
 
 
