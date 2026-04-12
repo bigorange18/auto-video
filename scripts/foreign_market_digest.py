@@ -74,6 +74,21 @@ FEEDS = [
         "url": "https://feeds.reuters.com/reuters/AsiaBusinessNews",
         "weight": 2,
     },
+    {
+        "label": "US",
+        "url": "https://rss.sina.com.cn/finance/stock/usstock.xml",
+        "weight": 3,
+    },
+    {
+        "label": "Global",
+        "url": "https://rss.sina.com.cn/finance/global/globaleconomy.xml",
+        "weight": 2,
+    },
+    {
+        "label": "Global",
+        "url": "http://finance.ifeng.com/rss/stock_us.xml",
+        "weight": 2,
+    },
 ]
 
 THEMES = [
