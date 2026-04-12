@@ -24,7 +24,7 @@ jobs:
           WECHAT_APP_ID: ${{ secrets.WECHAT_APP_ID }}
           WECHAT_APP_SECRET: ${{ secrets.WECHAT_APP_SECRET }}
           WECHAT_AUTHOR: ${{ vars.WECHAT_AUTHOR }}
-        run: python3 scripts/foreign_market_digest.py --hours 24 --limit 10 --pushplus-token "$PUSHPLUS_TOKEN" --feishu-webhook "$FEISHU_WEBHOOK_URL" --wechat-app-id "$WECHAT_APP_ID" --wechat-app-secret "$WECHAT_APP_SECRET" --wechat-author "$WECHAT_AUTHOR"
+        run: /home/orange/miniconda3/bin/python3 scripts/foreign_market_digest.py --hours 24 --limit 10 --pushplus-token "$PUSHPLUS_TOKEN" --feishu-webhook "$FEISHU_WEBHOOK_URL" --wechat-app-id "$WECHAT_APP_ID" --wechat-app-secret "$WECHAT_APP_SECRET" --wechat-author "$WECHAT_AUTHOR"
 
       - name: Upload digest artifact
         uses: actions/upload-artifact@v4
