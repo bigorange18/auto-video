@@ -51,17 +51,27 @@ DEFAULT_WECHAT_COVER_PNG_BASE64 = (
 FEEDS = [
     {
         "label": "US",
-        "query": '(NASDAQ OR NYSE OR "S&P 500" OR "Dow Jones") when:1d',
+        "url": "https://search.cnbc.com/rs/search/combinedcomplexquery.xml?partnerId=wrss01&id=100003114",
+        "weight": 3,
+    },
+    {
+        "label": "US",
+        "url": "https://feeds.content.dowjones.io/public/rss/mw_realtimeheadlines",
+        "weight": 3,
+    },
+    {
+        "label": "US",
+        "url": "https://finance.yahoo.com/rss/topstories",
         "weight": 3,
     },
     {
         "label": "Europe",
-        "query": '("European stocks" OR "STOXX 600" OR FTSE OR DAX) when:1d',
+        "url": "https://feeds.reuters.com/reuters/EuropeanBusinessNews",
         "weight": 2,
     },
     {
         "label": "Asia",
-        "query": '("Asian stocks" OR Nikkei OR Hang Seng OR "MSCI Asia") when:1d',
+        "url": "https://feeds.reuters.com/reuters/AsiaBusinessNews",
         "weight": 2,
     },
 ]
@@ -197,7 +207,7 @@ def collect_articles(hours: int) -> list[Article]:
     failures: list[str] = []
 
     for feed in FEEDS:
-        url = build_rss_url(feed["query"])
+        url = feed["url"]
         try:
             payload = fetch_text(url)
         except Exception as exc:  # noqa: BLE001
@@ -679,7 +689,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    source_urls = [build_rss_url(feed["query"]) for feed in FEEDS]
+    source_urls = [feed["url"] for feed in FEEDS]
     articles = collect_articles(args.hours)[: args.limit]
     if not articles:
         raise RuntimeError("No eligible foreign market articles found in the selected time window.")
