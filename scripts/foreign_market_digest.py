@@ -51,42 +51,32 @@ DEFAULT_WECHAT_COVER_PNG_BASE64 = (
 FEEDS = [
     {
         "label": "US",
-        "url": "https://search.cnbc.com/rs/search/combinedcomplexquery.xml?partnerId=wrss01&id=100003114",
-        "weight": 3,
-    },
-    {
-        "label": "US",
-        "url": "https://feeds.content.dowjones.io/public/rss/mw_realtimeheadlines",
-        "weight": 3,
-    },
-    {
-        "label": "US",
         "url": "https://finance.yahoo.com/rss/topstories",
         "weight": 3,
     },
     {
+        "label": "US",
+        "url": "https://www.investing.com/rss/news_25.rss",
+        "weight": 3,
+    },
+    {
         "label": "Europe",
-        "url": "https://feeds.reuters.com/reuters/EuropeanBusinessNews",
+        "query": '("European stocks" OR "STOXX 600" OR FTSE OR DAX) when:1d',
         "weight": 2,
     },
     {
         "label": "Asia",
-        "url": "https://feeds.reuters.com/reuters/AsiaBusinessNews",
-        "weight": 2,
-    },
-    {
-        "label": "US",
-        "url": "https://rss.sina.com.cn/finance/stock/usstock.xml",
-        "weight": 3,
-    },
-    {
-        "label": "Global",
-        "url": "https://rss.sina.com.cn/finance/global/globaleconomy.xml",
+        "query": '("Asian stocks" OR Nikkei OR Hang Seng OR "MSCI Asia") when:1d',
         "weight": 2,
     },
     {
         "label": "Global",
-        "url": "http://finance.ifeng.com/rss/stock_us.xml",
+        "query": '(NASDAQ OR NYSE OR "S&P 500" OR "Dow Jones") when:1d',
+        "weight": 2,
+    },
+    {
+        "label": "Global",
+        "url": "https://www.investing.com/rss/news_285.rss",
         "weight": 2,
     },
 ]
@@ -165,6 +155,12 @@ def clean_text(value: str | None) -> str:
 def parse_datetime(value: str | None) -> datetime | None:
     if not value:
         return None
+    value = value.strip()
+    for fmt in ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.strptime(value, fmt).replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
     try:
         parsed = parsedate_to_datetime(value)
     except (TypeError, ValueError):
@@ -231,7 +227,7 @@ def collect_articles(hours: int) -> list[Article]:
     failures: list[str] = []
 
     for feed in FEEDS:
-        url = feed["url"]
+        url = feed.get("url") or build_rss_url(feed["query"])
         try:
             payload = fetch_text(url)
         except Exception as exc:  # noqa: BLE001
@@ -256,7 +252,7 @@ def collect_articles(hours: int) -> list[Article]:
             if not raw_title:
                 continue
 
-            raw_source = clean_text(item.findtext("source"))
+            raw_source = clean_text(item.findtext("source") or item.findtext("author"))
             title, source = split_title_and_source(raw_title, raw_source)
             published = parse_datetime(item.findtext("pubDate"))
             if published is None:
@@ -725,7 +721,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    source_urls = [feed["url"] for feed in FEEDS]
+    source_urls = [feed.get("url") or build_rss_url(feed["query"]) for feed in FEEDS]
     articles = collect_articles(args.hours)[: args.limit]
     if not articles:
         raise RuntimeError("No eligible foreign market articles found in the selected time window.")

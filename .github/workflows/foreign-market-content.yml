@@ -17,6 +17,19 @@ jobs:
         with:
           clean: true
 
+      - name: Debug revision
+        run: |
+          git rev-parse HEAD
+          git branch --show-current
+          /home/orange/miniconda3/bin/python3 -V
+          /home/orange/miniconda3/bin/python3 - <<'PY'
+          from pathlib import Path
+          text = Path("scripts/foreign_market_digest.py").read_text(encoding="utf-8")
+          print("has_invalid_rss_debug=", "invalid RSS payload" in text)
+          print("has_pushplus=", "build_pushplus_payload" in text)
+          print("has_wechat_draft=", "create_wechat_draft" in text)
+          PY
+
       - name: Generate foreign market digest
         env:
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
