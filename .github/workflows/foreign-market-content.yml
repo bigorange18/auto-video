@@ -7,18 +7,15 @@ on:
 
 jobs:
   build-digest:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     permissions:
       contents: read
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          clean: true
 
       - name: Generate foreign market digest
         env:
@@ -27,7 +24,7 @@ jobs:
           WECHAT_APP_ID: ${{ secrets.WECHAT_APP_ID }}
           WECHAT_APP_SECRET: ${{ secrets.WECHAT_APP_SECRET }}
           WECHAT_AUTHOR: ${{ vars.WECHAT_AUTHOR }}
-        run: python scripts/foreign_market_digest.py --hours 24 --limit 10 --pushplus-token "$PUSHPLUS_TOKEN" --feishu-webhook "$FEISHU_WEBHOOK_URL" --wechat-app-id "$WECHAT_APP_ID" --wechat-app-secret "$WECHAT_APP_SECRET" --wechat-author "$WECHAT_AUTHOR"
+        run: /home/orange/miniconda3/bin/python3 scripts/foreign_market_digest.py --hours 24 --limit 10 --pushplus-token "$PUSHPLUS_TOKEN" --feishu-webhook "$FEISHU_WEBHOOK_URL" --wechat-app-id "$WECHAT_APP_ID" --wechat-app-secret "$WECHAT_APP_SECRET" --wechat-author "$WECHAT_AUTHOR"
 
       - name: Upload digest artifact
         uses: actions/upload-artifact@v4
