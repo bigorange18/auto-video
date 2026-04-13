@@ -113,6 +113,15 @@ def fetch_text(url: str) -> str:
         return response.read().decode("utf-8")
 
 
+def summarize_payload(payload: str, limit: int = 160) -> str:
+    compact = re.sub(r"\s+", " ", payload).strip()
+    if not compact:
+        return "<empty response>"
+    if len(compact) <= limit:
+        return compact
+    return compact[:limit] + "..."
+
+
 def fetch_json(url: str) -> dict:
     request = Request(url, headers={"User-Agent": USER_AGENT})
     with urlopen(request, timeout=20) as response:
@@ -204,7 +213,19 @@ def collect_articles(hours: int) -> list[Article]:
             failures.append(f"{feed['label']}: {exc}")
             continue
 
-        root = ET.fromstring(payload)
+        if not payload.strip():
+            failures.append(f"{feed['label']}: empty RSS response from {url}")
+            continue
+
+        try:
+            root = ET.fromstring(payload)
+        except ET.ParseError as exc:
+            snippet = summarize_payload(payload)
+            failures.append(
+                f"{feed['label']}: invalid RSS payload from {url}: {exc}; body={snippet}"
+            )
+            continue
+
         for item in root.findall("./channel/item"):
             raw_title = clean_text(item.findtext("title"))
             if not raw_title:
@@ -241,7 +262,7 @@ def collect_articles(hours: int) -> list[Article]:
                 deduped[dedupe_key] = article
 
     if not deduped and failures:
-        raise RuntimeError("; ".join(failures))
+        raise RuntimeError(" | ".join(failures))
 
     return sorted(deduped.values(), key=lambda article: (-article.score, article.age_hours, article.title))
 
