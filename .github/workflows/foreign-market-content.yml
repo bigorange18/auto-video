@@ -19,8 +19,10 @@ jobs:
 
       - name: Debug revision
         run: |
-          git rev-parse HEAD
-          git branch --show-current
+          echo "GITHUB_SHA=$GITHUB_SHA"
+          echo "GITHUB_REF=$GITHUB_REF"
+          echo "GITHUB_REF_NAME=$GITHUB_REF_NAME"
+          ls -la
           /home/orange/miniconda3/bin/python3 -V
           /home/orange/miniconda3/bin/python3 - <<'PY'
           from pathlib import Path

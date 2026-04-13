@@ -15,6 +15,7 @@
 ## 目录
 
 - `scripts/foreign_market_digest.py`：抓取 RSS、筛选热点、生成文案
+- `bin/run_digest.sh`：服务器本地 cron 运行入口
 - `.github/workflows/foreign-market-content.yml`：定时运行工作流
 - `output/`：脚本运行后的产物目录（默认不入库）
 
@@ -56,6 +57,47 @@ python scripts/foreign_market_digest.py --hours 24 --limit 10 --wechat-app-id "$
 
 - `output/foreign_market_hotspots.json`
 - `output/foreign_market_copy.md`
+
+## 服务器 Cron
+
+如果你不想继续折腾 GitHub Actions，推荐直接在服务器上用 `cron` 定时执行。
+
+1. 复制环境模板：
+
+```bash
+cp .env.digest.example .env.digest
+```
+
+2. 编辑 `.env.digest`，填入你的：
+
+- `PUSHPLUS_TOKEN`
+- `WECHAT_APP_ID`
+- `WECHAT_APP_SECRET`
+- `WECHAT_AUTHOR`
+
+3. 先手动执行一次：
+
+```bash
+bash bin/run_digest.sh
+```
+
+4. 配置定时任务：
+
+```bash
+crontab -e
+```
+
+例如每天早上 `08:30` 执行：
+
+```cron
+30 8 * * * /bin/bash /home/orange/auto-video/bin/run_digest.sh
+```
+
+5. 查看日志：
+
+```bash
+tail -f /home/orange/auto-video/cron.log
+```
 
 ## 输出内容
 
