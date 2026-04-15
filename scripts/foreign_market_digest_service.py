@@ -9,6 +9,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+from html import escape as html_escape
 from html import unescape
 from pathlib import Path
 from typing import Iterable
@@ -279,6 +280,99 @@ class DigestFetcher:
 class DigestRenderer:
     """Renders summary payload and markdown output."""
 
+    def format_iso_datetime(self, value: str) -> str:
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return value
+        return parsed.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    def build_wechat_article_content(self, payload: dict) -> str:
+        parts = [
+            f"<h1>{html_escape('海外热点股市日报')}</h1>",
+            f"<p><strong>生成时间：</strong>{html_escape(self.format_iso_datetime(str(payload.get('generated_at') or '')))}</p>",
+            f"<p><strong>统计窗口：</strong>近 {int(payload.get('window_hours') or 0)} 小时</p>",
+            f"<p><strong>一句话概览：</strong>{html_escape(str(payload.get('summary') or ''))}</p>",
+        ]
+
+        themes = [str(item).strip() for item in payload.get("themes", []) if str(item).strip()]
+        if themes:
+            parts.append(f"<p><strong>当前主线：</strong>{html_escape('、'.join(themes))}</p>")
+
+        parts.extend(["<h2>标题建议</h2>", "<ul>"])
+        for title in payload.get("headline_candidates", [])[:3]:
+            parts.append(f"<li>{html_escape(str(title))}</li>")
+        parts.append("</ul>")
+
+        parts.append("<h2>海外热点清单</h2>")
+        articles = payload.get("articles", [])
+        if articles:
+            for index, article in enumerate(articles, start=1):
+                title = html_escape(str(article.get("title") or ""))
+                region = html_escape(str(article.get("region") or ""))
+                theme = html_escape(str(article.get("theme") or ""))
+                source = html_escape(str(article.get("source") or ""))
+                rationale = html_escape(str(article.get("rationale") or ""))
+                published_at = html_escape(self.format_iso_datetime(str(article.get("published_at") or "")))
+                score = html_escape(str(article.get("score") or ""))
+                link = html_escape(str(article.get("link") or ""))
+                parts.append(
+                    f"<p><strong>{index}. [{theme}] {title}</strong><br/>"
+                    f"区域：{region} | 来源：{source} | 热度分：{score}<br/>"
+                    f"发布时间：{published_at}<br/>"
+                    f"入选理由：{rationale}<br/>"
+                    f"<a href=\"{link}\">查看原文</a></p>"
+                )
+        else:
+            parts.append("<p>当前没有可用的海外热点条目。</p>")
+
+        hot_topics = payload.get("hot_topics", [])
+        if hot_topics:
+            parts.append("<h2>国内热榜观察</h2>")
+            parts.append("<ul>")
+            for topic in hot_topics[:12]:
+                platform = html_escape(str(topic.get("platform") or ""))
+                rank = topic.get("rank")
+                rank_text = f"#{rank}" if isinstance(rank, int) and rank > 0 else ""
+                title = html_escape(str(topic.get("title") or ""))
+                hot = html_escape(str(topic.get("hot") or ""))
+                suffix_parts = [part for part in (platform, rank_text, hot) if part]
+                suffix = f"（{' | '.join(suffix_parts)}）" if suffix_parts else ""
+                parts.append(f"<li>{title}{html_escape(suffix)}</li>")
+            parts.append("</ul>")
+
+        short_video_script = str(payload.get("short_video_script") or "").strip()
+        if short_video_script:
+            parts.extend(["<h2>短视频口播文案</h2>", f"<p>{html_escape(short_video_script)}</p>"])
+
+        social_post = str(payload.get("social_post") or "").strip()
+        if social_post:
+            parts.extend(["<h2>社媒短文案</h2>", f"<p>{html_escape(social_post)}</p>"])
+
+        fetch_failures = [str(item).strip() for item in payload.get("fetch_failures", []) if str(item).strip()]
+        hot_topic_failures = [str(item).strip() for item in payload.get("hot_topic_failures", []) if str(item).strip()]
+        if fetch_failures or hot_topic_failures:
+            parts.append("<h2>抓取告警</h2>")
+            parts.append("<ul>")
+            for item in fetch_failures:
+                parts.append(f"<li>外盘源异常：{html_escape(item)}</li>")
+            for item in hot_topic_failures:
+                parts.append(f"<li>热榜源异常：{html_escape(item)}</li>")
+            parts.append("</ul>")
+
+        source_urls = [str(item).strip() for item in payload.get("source_urls", []) if str(item).strip()]
+        if source_urls:
+            parts.append("<h2>数据源</h2>")
+            parts.append("<ul>")
+            for url in source_urls[:10]:
+                escaped_url = html_escape(url)
+                parts.append(f"<li><a href=\"{escaped_url}\">{escaped_url}</a></li>")
+            if len(source_urls) > 10:
+                parts.append(f"<li>其余 {len(source_urls) - 10} 个数据源已省略</li>")
+            parts.append("</ul>")
+
+        return "".join(parts)
+
     def top_themes(self, articles: Iterable[Article], limit: int = 3) -> list[str]:
         counts: dict[str, int] = {}
         for article in articles:
@@ -346,14 +440,25 @@ class DigestRenderer:
         lines = [
             "# 海外热点股市信息日报",
             "",
-            f"生成时间：{payload['generated_at']}",
+            f"生成时间：{self.format_iso_datetime(payload['generated_at'])}",
             f"统计窗口：近 {payload['window_hours']} 小时",
             "",
             "## 一句话概览",
             payload["summary"],
             "",
-            "## 标题建议",
+            "## 当前主线",
         ]
+
+        if payload["themes"]:
+            for theme in payload["themes"]:
+                lines.append(f"- {theme}")
+        else:
+            lines.append("- 市场波动")
+
+        lines.extend([
+            "",
+            "## 标题建议",
+        ])
 
         for title in payload["headline_candidates"]:
             lines.append(f"- {title}")
@@ -364,8 +469,29 @@ class DigestRenderer:
         for index, article in enumerate(payload["articles"], start=1):
             lines.append(f"{index}. [{article['theme']}] {article['title']}")
             lines.append(f"来源：{article['source']} | 区域：{article['region']} | 热度分：{article['score']}")
-            lines.append(f"发布时间：{article['published_at']} | 入选理由：{article['rationale']}")
+            lines.append(f"发布时间：{self.format_iso_datetime(article['published_at'])} | 入选理由：{article['rationale']}")
             lines.append(f"链接：{article['link']}")
+            lines.append("")
+
+        if payload["hot_topics"]:
+            lines.append("## 国内热榜")
+            for topic in payload["hot_topics"]:
+                rank = topic.get("rank")
+                rank_text = f"#{rank}" if isinstance(rank, int) and rank > 0 else "未标注排名"
+                hot = topic.get("hot") or "热度未知"
+                lines.append(f"- [{topic['platform']}] {topic['title']} | 排名：{rank_text} | 热度：{hot}")
+                if topic.get("url"):
+                    lines.append(f"  链接：{topic['url']}")
+            lines.append("")
+
+        fetch_failures = payload.get("fetch_failures", [])
+        hot_topic_failures = payload.get("hot_topic_failures", [])
+        if fetch_failures or hot_topic_failures:
+            lines.append("## 抓取告警")
+            for item in fetch_failures:
+                lines.append(f"- 外盘源异常：{item}")
+            for item in hot_topic_failures:
+                lines.append(f"- 热榜源异常：{item}")
             lines.append("")
 
         lines.append("## 数据源")
@@ -377,6 +503,9 @@ class DigestRenderer:
 
 class DigestPublisher:
     """Publishes payload to local files and optional external channels."""
+
+    def __init__(self) -> None:
+        self.renderer = DigestRenderer()
 
     def write_file(self, path: Path, content: str) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -722,7 +851,7 @@ class DigestPublisher:
                         "title": "海外热点股市日报",
                         "author": author,
                         "digest": payload["summary"],
-                        "content": f"<p>{payload['summary']}</p><p>{payload['social_post']}</p>",
+                        "content": self.renderer.build_wechat_article_content(payload),
                         "content_source_url": "",
                         "thumb_media_id": resolved_media_id,
                         "need_open_comment": 0,
