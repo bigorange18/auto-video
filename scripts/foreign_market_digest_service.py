@@ -6,19 +6,21 @@ import logging
 import re
 import sys
 import xml.etree.ElementTree as ET
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from html import escape as html_escape
 from html import unescape
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 from urllib.parse import quote, urljoin, urlparse
 from urllib.request import Request, urlopen
 
 from PIL import Image, ImageOps  # pyright: ignore[reportMissingImports]
 
 from digest_config import (
+    DEFAULT_LLM_ARTICLE_SCORING_PROMPT_MD,
+    DEFAULT_LLM_COPYWRITING_PROMPT_MD,
     DEFAULT_WECHAT_THUMB_CACHE,
     FEEDS,
     HOT_TOPIC_APIS,
@@ -501,6 +503,340 @@ class DigestRenderer:
         return "\n".join(lines).strip() + "\n"
 
 
+class DigestLLMRefiner:
+    """Refine generated copywriting with an optional LLM call."""
+
+    def __init__(self, args) -> None:
+        self.enabled = bool(getattr(args, "llm_enabled", False))
+        self.base_url = str(getattr(args, "llm_base_url", "") or "").strip() or "https://api.openai.com/v1"
+        self.api_key = str(getattr(args, "llm_api_key", "") or "").strip()
+        self.model = str(getattr(args, "llm_model", "") or "").strip()
+        self.timeout = int(getattr(args, "llm_timeout", 25) or 25)
+        self.article_scoring_prompt_path = Path(
+            getattr(args, "llm_article_scoring_prompt_md", DEFAULT_LLM_ARTICLE_SCORING_PROMPT_MD)
+            or DEFAULT_LLM_ARTICLE_SCORING_PROMPT_MD
+        )
+        self.copywriting_prompt_path = Path(
+            getattr(args, "llm_copywriting_prompt_md", DEFAULT_LLM_COPYWRITING_PROMPT_MD)
+            or DEFAULT_LLM_COPYWRITING_PROMPT_MD
+        )
+
+    def can_run(self) -> bool:
+        return self.enabled and bool(self.api_key) and bool(self.model)
+
+    def _build_article_scoring_messages(self, articles: list[Article], select_limit: int) -> list[dict[str, str]]:
+        candidates = [
+            {
+                "index": index,
+                "title": article.title,
+                "source": article.source,
+                "region": article.region,
+                "theme": article.theme,
+                "age_hours": article.age_hours,
+                "base_score": article.score,
+                "rationale": article.rationale,
+            }
+            for index, article in enumerate(articles, start=1)
+        ]
+        template = self._load_article_scoring_prompt_template()
+        system_prompt, user_prompt_template = self._split_prompt_template(template)
+        user_prompt = user_prompt_template.replace(
+            "{{select_limit}}",
+            str(select_limit),
+        ).replace(
+            "{{output_schema}}",
+            json.dumps({"ranked": [{"index": 1, "score": 88, "reason": "..."}]}, ensure_ascii=False, indent=2),
+        ).replace(
+            "{{candidates_json}}",
+            json.dumps(candidates, ensure_ascii=False, indent=2),
+        )
+        return [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+    def select_articles(self, articles: list[Article], select_limit: int) -> list[Article]:
+        if not articles:
+            return []
+
+        limit = max(1, min(select_limit, len(articles)))
+        default_selected = articles[:limit]
+
+        if not self.can_run():
+            if self.enabled and not self.api_key:
+                LOGGER.warning("LLM article scoring skipped: missing api key")
+            if self.enabled and not self.model:
+                LOGGER.warning("LLM article scoring skipped: missing model")
+            return default_selected
+
+        try:
+            messages = self._build_article_scoring_messages(articles, limit)
+            content = self._request_completion(messages)
+            output = self._parse_result(content)
+            ranked = output.get("ranked")
+            if not isinstance(ranked, list) or not ranked:
+                raise ValueError("LLM article scoring response missing ranked list")
+
+            llm_scores: dict[int, tuple[int, str]] = {}
+            for item in ranked:
+                if not isinstance(item, dict):
+                    continue
+                raw_index = item.get("index")
+                if not isinstance(raw_index, int):
+                    try:
+                        raw_index = int(raw_index)
+                    except (TypeError, ValueError):
+                        continue
+                if raw_index < 1 or raw_index > len(articles):
+                    continue
+
+                raw_score = item.get("score")
+                try:
+                    score = int(float(raw_score))
+                except (TypeError, ValueError):
+                    continue
+                score = max(0, min(100, score))
+                reason = str(item.get("reason") or "").strip()
+
+                current = llm_scores.get(raw_index)
+                if current is None or score > current[0]:
+                    llm_scores[raw_index] = (score, reason)
+
+            if not llm_scores:
+                raise ValueError("LLM article scoring has no valid entries")
+
+            decorated: list[tuple[int, int, int, Article]] = []
+            for index, article in enumerate(articles, start=1):
+                llm_score, llm_reason = llm_scores.get(index, (-1, ""))
+                merged_rationale = article.rationale
+                if llm_reason:
+                    merged_rationale = f"{article.rationale}；AI研判：{llm_reason}"
+                merged_article = replace(article, rationale=merged_rationale)
+                decorated.append((llm_score, article.score, index, merged_article))
+
+            decorated.sort(key=lambda item: (-item[0], -item[1], item[2]))
+            selected = [item[3] for item in decorated[:limit]]
+            LOGGER.info("llm article scoring completed, selected %d of %d", len(selected), len(articles))
+            return selected
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning("LLM article scoring failed, fallback to rule-based ranking: %s", exc)
+            return default_selected
+
+    def _build_context(self, payload: dict) -> dict[str, Any]:
+        articles = payload.get("articles", [])
+        hot_topics = payload.get("hot_topics", [])
+        return {
+            "window_hours": int(payload.get("window_hours") or 24),
+            "themes": [str(item) for item in payload.get("themes", [])[:4]],
+            "summary": str(payload.get("summary") or ""),
+            "headline_candidates": [str(item) for item in payload.get("headline_candidates", [])[:3]],
+            "short_video_script": str(payload.get("short_video_script") or ""),
+            "social_post": str(payload.get("social_post") or ""),
+            "articles": [
+                {
+                    "title": str(item.get("title") or ""),
+                    "source": str(item.get("source") or ""),
+                    "region": str(item.get("region") or ""),
+                    "theme": str(item.get("theme") or ""),
+                    "score": int(item.get("score") or 0),
+                    "published_at": str(item.get("published_at") or ""),
+                    "rationale": str(item.get("rationale") or ""),
+                }
+                for item in articles[:8]
+                if isinstance(item, dict)
+            ],
+            "hot_topics": [
+                {
+                    "platform": str(item.get("platform") or ""),
+                    "rank": int(item.get("rank") or 0),
+                    "title": str(item.get("title") or ""),
+                    "hot": str(item.get("hot") or ""),
+                }
+                for item in hot_topics[:8]
+                if isinstance(item, dict)
+            ],
+        }
+
+    def _extract_json_text(self, text: str) -> str:
+        content = text.strip()
+        if content.startswith("```"):
+            content = re.sub(r"^```[a-zA-Z0-9_\-]*\n", "", content)
+            content = re.sub(r"\n```$", "", content)
+        start = content.find("{")
+        end = content.rfind("}")
+        if start >= 0 and end > start:
+            return content[start : end + 1]
+        return content
+
+    def _parse_result(self, text: str) -> dict[str, Any]:
+        parsed = json.loads(self._extract_json_text(text))
+        if not isinstance(parsed, dict):
+            raise ValueError("LLM response is not a JSON object")
+        return parsed
+
+    def _load_copywriting_prompt_template(self) -> str:
+        default_template = (
+            "# System Prompt\n"
+            "你是财经内容编辑。你要根据输入的市场信息，输出简洁、有信息密度、避免夸张的中文文案。"
+            "只输出 JSON，不要输出解释。\n\n"
+            "# User Prompt\n"
+            "请基于以下数据改写文案。\n"
+            "1. summary 为一句话总览。\n"
+            "2. headline_candidates 输出 3 条标题。\n"
+            "3. short_video_script 适合口播。\n"
+            "4. social_post 适合社媒发布。\n"
+            "5. 避免编造未出现的数据。\n\n"
+            "输出 JSON 结构：\n{{output_schema}}\n\n"
+            "输入数据：\n{{input_data}}\n"
+        )
+        try:
+            content = self.copywriting_prompt_path.read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            LOGGER.warning("copywriting prompt markdown not found, use default prompt: %s", exc)
+            return default_template
+        return content or default_template
+
+    def _load_article_scoring_prompt_template(self) -> str:
+        default_template = (
+            "# System Prompt\n"
+            "你是海外市场内容总编。你需要从候选新闻中挑选最值得做成公众号日报的条目。"
+            "评分标准看：市场影响力、时效性、来源可信度、对读者决策价值。"
+            "不要编造事实，只输出 JSON。\n\n"
+            "# User Prompt\n"
+            "请对每条候选新闻打分（0-100），并给出一句中文理由。\n"
+            "最终至少返回前 {{select_limit}} 条排序结果。\n\n"
+            "输出 JSON 结构：\n{{output_schema}}\n\n"
+            "候选新闻：\n{{candidates_json}}\n"
+        )
+        try:
+            content = self.article_scoring_prompt_path.read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            LOGGER.warning("article scoring prompt markdown not found, use default prompt: %s", exc)
+            return default_template
+        return content or default_template
+
+    def _split_prompt_template(self, template: str) -> tuple[str, str]:
+        system_marker = "# System Prompt"
+        user_marker = "# User Prompt"
+        if system_marker not in template or user_marker not in template:
+            return (
+                "你是财经内容编辑。你要根据输入的市场信息，输出简洁、有信息密度、避免夸张的中文文案。只输出 JSON，不要输出解释。",
+                template,
+            )
+
+        system_start = template.index(system_marker) + len(system_marker)
+        user_start = template.index(user_marker)
+        system_prompt = template[system_start:user_start].strip()
+        user_prompt = template[user_start + len(user_marker) :].strip()
+        return system_prompt, user_prompt
+
+    def _build_messages(self, payload: dict) -> list[dict[str, str]]:
+        context = self._build_context(payload)
+        schema_hint = {
+            "summary": "string, 1 sentence",
+            "headline_candidates": ["string", "string", "string"],
+            "short_video_script": "string, around 40-90 Chinese chars",
+            "social_post": "string, around 40-120 Chinese chars",
+        }
+        template = self._load_copywriting_prompt_template()
+        system_prompt, user_prompt_template = self._split_prompt_template(template)
+        user_prompt = user_prompt_template.replace(
+            "{{output_schema}}",
+            json.dumps(schema_hint, ensure_ascii=False, indent=2),
+        ).replace(
+            "{{input_data}}",
+            json.dumps(context, ensure_ascii=False, indent=2),
+        )
+        return [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+    def _request_completion(self, messages: list[dict[str, str]]) -> str:
+        url = f"{self.base_url.rstrip('/')}/chat/completions"
+        request_payload = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": 0.4,
+            "max_tokens": 900,
+        }
+        request = Request(
+            url,
+            data=json.dumps(request_payload, ensure_ascii=False).encode("utf-8"),
+            headers={
+                "User-Agent": USER_AGENT,
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json; charset=utf-8",
+            },
+            method="POST",
+        )
+        with urlopen(request, timeout=self.timeout) as response:
+            raw = json.loads(response.read().decode("utf-8"))
+        choices = raw.get("choices")
+        if not isinstance(choices, list) or not choices:
+            raise RuntimeError(f"LLM response missing choices: {raw}")
+        message = choices[0].get("message") if isinstance(choices[0], dict) else None
+        content = message.get("content") if isinstance(message, dict) else ""
+        if not isinstance(content, str) or not content.strip():
+            raise RuntimeError(f"LLM response missing content: {raw}")
+        return content
+
+    def _sanitize_output(self, output: dict[str, Any], fallback: dict) -> dict[str, Any]:
+        refined: dict[str, Any] = {}
+
+        summary = str(output.get("summary") or "").strip()
+        refined["summary"] = summary or str(fallback.get("summary") or "")
+
+        headlines_raw = output.get("headline_candidates")
+        headlines: list[str] = []
+        if isinstance(headlines_raw, list):
+            for item in headlines_raw:
+                text = str(item).strip()
+                if text:
+                    headlines.append(text)
+        if not headlines:
+            headlines = [str(item) for item in fallback.get("headline_candidates", []) if str(item).strip()]
+        refined["headline_candidates"] = headlines[:3]
+
+        short_video_script = str(output.get("short_video_script") or "").strip()
+        refined["short_video_script"] = short_video_script or str(fallback.get("short_video_script") or "")
+
+        social_post = str(output.get("social_post") or "").strip()
+        refined["social_post"] = social_post or str(fallback.get("social_post") or "")
+
+        return refined
+
+    def refine_payload(self, payload: dict) -> dict:
+        payload["llm_refined"] = False
+
+        if not self.enabled:
+            return payload
+        if not self.api_key:
+            LOGGER.warning("LLM refinement skipped: missing api key")
+            return payload
+        if not self.model:
+            LOGGER.warning("LLM refinement skipped: missing model")
+            return payload
+
+        try:
+            messages = self._build_messages(payload)
+            content = self._request_completion(messages)
+            output = self._parse_result(content)
+            refined = self._sanitize_output(output, payload)
+
+            payload["summary"] = refined["summary"]
+            payload["headline_candidates"] = refined["headline_candidates"]
+            payload["short_video_script"] = refined["short_video_script"]
+            payload["social_post"] = refined["social_post"]
+            payload["llm_refined"] = True
+
+            LOGGER.info("llm refinement completed with model=%s", self.model)
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning("LLM refinement failed, fallback to rule-based copy: %s", exc)
+
+        return payload
+
+
 class DigestPublisher:
     """Publishes payload to local files and optional external channels."""
 
@@ -896,12 +1232,14 @@ class ForeignMarketDigestService:
         self.args = args
         self.fetcher = DigestFetcher()
         self.renderer = DigestRenderer()
+        self.llm_refiner = DigestLLMRefiner(args)
         self.publisher = DigestPublisher()
 
     def run(self) -> int:
         LOGGER.info("digest run started")
         articles, failures, source_urls = self.fetcher.collect_articles(self.args.hours)
-        articles = articles[: self.args.limit]
+        candidate_articles = articles[: self.args.limit]
+        articles = self.llm_refiner.select_articles(candidate_articles, self.args.select_limit)
         hot_topics, hot_topic_failures = self.fetcher.collect_hot_topics(self.args.hot_limit)
 
         if not articles and self.args.strict_fetch:
@@ -916,6 +1254,7 @@ class ForeignMarketDigestService:
             failures=failures,
             hot_topic_failures=hot_topic_failures,
         )
+        payload = self.llm_refiner.refine_payload(payload)
 
         self.publisher.write_file(
             self.args.output_json,

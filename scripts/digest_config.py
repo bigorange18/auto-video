@@ -21,6 +21,15 @@ class HotTopicSource:
 USER_AGENT = "Mozilla/5.0 (compatible; auto-video/1.0; +https://github.com/)"
 DEFAULT_OUTPUT_JSON = Path("output/foreign_market_hotspots.json")
 DEFAULT_OUTPUT_MD = Path("output/foreign_market_copy.md")
+DEFAULT_LLM_CONFIG = Path("scripts/digest_llm_config.json")
+DEFAULT_LLM_COPYWRITING_PROMPT_MD = Path("scripts/digest_copywriting_prompt.md")
+DEFAULT_LLM_ARTICLE_SCORING_PROMPT_MD = Path("scripts/digest_article_scoring_prompt.md")
+DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
+DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
+DEFAULT_QWEN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+DEFAULT_QWEN_MODEL = "qwen-plus"
+DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
+DEFAULT_DEEPSEEK_MODEL = "deepseek-chat"
 DEFAULT_LOG_DIR = Path("logs")
 GOOGLE_NEWS_BASE = "https://news.google.com/rss/search"
 PUSHPLUS_URL = "https://www.pushplus.plus/send"

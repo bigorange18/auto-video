@@ -32,25 +32,114 @@
 仓库不依赖第三方 Python 包，直接运行即可：
 
 ```bash
-python scripts/foreign_market_digest.py --hours 24 --limit 10
+python scripts/foreign_market_digest.py --hours 24 --limit 10 --select-limit 5
 ```
 
 推送飞书：
 
 ```bash
-python scripts/foreign_market_digest.py --hours 24 --limit 10 --feishu-webhook "$FEISHU_WEBHOOK_URL"
+python scripts/foreign_market_digest.py --hours 24 --limit 10 --select-limit 5 --feishu-webhook "$FEISHU_WEBHOOK_URL"
 ```
 
 推送微信（PushPlus）：
 
 ```bash
-python scripts/foreign_market_digest.py --hours 24 --limit 10 --pushplus-token "$PUSHPLUS_TOKEN"
+python scripts/foreign_market_digest.py --hours 24 --limit 10 --select-limit 5 --pushplus-token "$PUSHPLUS_TOKEN"
 ```
 
 创建微信公众号草稿：
 
 ```bash
-python scripts/foreign_market_digest.py --hours 24 --limit 10 --wechat-app-id "$WECHAT_APP_ID" --wechat-app-secret "$WECHAT_APP_SECRET" --wechat-author "你的公众号作者名"
+python scripts/foreign_market_digest.py --hours 24 --limit 10 --select-limit 5 --wechat-app-id "$WECHAT_APP_ID" --wechat-app-secret "$WECHAT_APP_SECRET" --wechat-author "你的公众号作者名"
+```
+
+启用大模型梳理（OpenAI 兼容接口）：
+
+```bash
+python scripts/foreign_market_digest.py \
+	--hours 24 --limit 10 --select-limit 5 \
+	--llm-enabled \
+	--llm-provider openai \
+	--llm-base-url "$LLM_BASE_URL" \
+	--llm-api-key "$LLM_API_KEY" \
+	--llm-model "${LLM_MODEL:-gpt-4o-mini}"
+```
+
+启用千问（阿里云 DashScope 兼容接口）：
+
+```bash
+python scripts/foreign_market_digest.py \
+	--hours 24 --limit 10 --select-limit 5 \
+	--llm-enabled \
+	--llm-provider qwen \
+	--llm-api-key "$DASHSCOPE_API_KEY" \
+	--llm-model "${QWEN_MODEL:-qwen-plus}"
+```
+
+如果不显式传 `--llm-base-url`，`qwen` 会默认使用：
+
+```text
+https://dashscope.aliyuncs.com/compatible-mode/v1
+```
+
+启用 DeepSeek（OpenAI 兼容接口）：
+
+```bash
+python scripts/foreign_market_digest.py \
+	--hours 24 --limit 10 --select-limit 5 \
+	--llm-enabled \
+	--llm-provider deepseek \
+	--llm-api-key "$DEEPSEEK_API_KEY" \
+	--llm-model "${DEEPSEEK_MODEL:-deepseek-chat}"
+```
+
+如果不显式传 `--llm-base-url`，`deepseek` 会默认使用：
+
+```text
+https://api.deepseek.com/v1
+```
+
+说明：默认会先抓取最多 10 条候选（`--limit`），再由大模型打分筛选 5 条（`--select-limit`）用于最终公众号内容。
+
+也可以通过环境变量配置：
+
+- `LLM_PROVIDER`（`openai`、`qwen` 或 `deepseek`）
+- `LLM_BASE_URL`（默认 `https://api.openai.com/v1`）
+- `LLM_API_KEY`
+- `LLM_MODEL`（默认 `gpt-4o-mini`）
+- `LLM_TIMEOUT`（默认 `25` 秒）
+- `DIGEST_LLM_ENABLED=1`（用于 `bin/run_digest.sh` 启用）
+
+千问也支持下面这些更直观的环境变量：
+
+- `DASHSCOPE_API_KEY`
+- `DASHSCOPE_BASE_URL`（默认 `https://dashscope.aliyuncs.com/compatible-mode/v1`）
+- `QWEN_API_KEY`（可作为 `DASHSCOPE_API_KEY` 的别名）
+- `QWEN_MODEL`（默认 `qwen-plus`）
+
+DeepSeek 也支持下面这些环境变量：
+
+- `DEEPSEEK_API_KEY`
+- `DEEPSEEK_BASE_URL`（默认 `https://api.deepseek.com/v1`）
+- `DEEPSEEK_KEY`（可作为 `DEEPSEEK_API_KEY` 的别名）
+- `DEEPSEEK_MODEL`（默认 `deepseek-chat`）
+
+服务器上推荐这样配置 `.env.digest`：
+
+```bash
+DIGEST_LLM_ENABLED=1
+LLM_PROVIDER=qwen
+DASHSCOPE_API_KEY=你的千问Key
+QWEN_MODEL=qwen-plus
+```
+
+如果你用 DeepSeek，可以改为：
+
+```bash
+DIGEST_LLM_ENABLED=1
+LLM_PROVIDER=deepseek
+DEEPSEEK_API_KEY=你的DeepSeekKey
+DEEPSEEK_MODEL=deepseek-chat
 ```
 
 默认输出：

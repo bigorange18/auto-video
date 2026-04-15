@@ -1,0 +1,38 @@
+{
+  "article_scoring": {
+    "goal": "从每天抓取的候选海外市场新闻里，挑出最值得写进公众号日报的少数重点条目。",
+    "selection_instruction": "优先保留能解释市场主线、对投资者有决策参考价值、且适合展开分析的内容。",
+    "dimensions": [
+      {
+        "name": "市场影响力",
+        "weight": 35,
+        "description": "是否影响主要指数、核心行业或龙头公司，是否具备跨市场传播性。"
+      },
+      {
+        "name": "时效性",
+        "weight": 25,
+        "description": "是否属于近24小时内的新增变量，是否会影响当日或隔夜交易。"
+      },
+      {
+        "name": "来源可信度",
+        "weight": 20,
+        "description": "来源是否权威、信息是否清晰可引用。"
+      },
+      {
+        "name": "读者决策价值",
+        "weight": 20,
+        "description": "是否能帮助读者判断行业机会、风险偏好变化或资金主线。"
+      }
+    ]
+  },
+  "copywriting": {
+    "audience": "关注美股、港股、A股联动的投资者与内容编辑",
+    "tone": "专业、克制、信息密度高，避免标题党和空泛形容",
+    "requirements": [
+      "summary 要像盘前总览，先说市场主线再说关键变量。",
+      "headline_candidates 要适合微信公众号标题，不夸张，不口水化。",
+      "short_video_script 要适合 30 到 60 秒中文口播。",
+      "social_post 要适合朋友圈或社媒分发，突出判断但不要编造结论。"
+    ]
+  }
+}
