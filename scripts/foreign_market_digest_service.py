@@ -14,6 +14,7 @@ from html import unescape
 from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import quote, urljoin, urlparse
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from PIL import Image, ImageOps  # pyright: ignore[reportMissingImports]
@@ -289,9 +290,142 @@ class DigestRenderer:
             return value
         return parsed.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
+    def normalize_topic_title(self, title: str) -> str:
+        lowered = title.lower().strip()
+        return re.sub(r"[^\w\u4e00-\u9fff]+", "", lowered)
+
+    def parse_hot_value(self, hot: str) -> float:
+        match = re.search(r"(\d+(?:\.\d+)?)", hot)
+        if not match:
+            return 0.0
+        value = float(match.group(1))
+        if "亿" in hot:
+            value *= 100000000
+        elif "万" in hot:
+            value *= 10000
+        return value
+
+    def select_key_hot_topics(self, hot_topics: list[HotTopic] | list[dict], limit: int = 8) -> list[dict[str, Any]]:
+        deduped: dict[str, dict[str, Any]] = {}
+        for raw in hot_topics:
+            topic = raw if isinstance(raw, dict) else asdict(raw)
+            title = str(topic.get("title") or "").strip()
+            if not title:
+                continue
+            key = self.normalize_topic_title(title)
+            rank = topic.get("rank")
+            rank_value = rank if isinstance(rank, int) and rank > 0 else 9999
+            hot_value = self.parse_hot_value(str(topic.get("hot") or ""))
+            current = deduped.get(key)
+            if current is None:
+                deduped[key] = dict(topic)
+                continue
+            current_rank = current.get("rank") if isinstance(current.get("rank"), int) else 9999
+            current_hot_value = self.parse_hot_value(str(current.get("hot") or ""))
+            if rank_value < current_rank or (rank_value == current_rank and hot_value > current_hot_value):
+                deduped[key] = dict(topic)
+
+        ranked = sorted(
+            deduped.values(),
+            key=lambda item: (
+                item.get("rank") if isinstance(item.get("rank"), int) and item.get("rank") > 0 else 9999,
+                -self.parse_hot_value(str(item.get("hot") or "")),
+                str(item.get("platform") or ""),
+                str(item.get("title") or ""),
+            ),
+        )
+        return ranked[:limit]
+
+    def classify_hot_topic(self, title: str) -> str:
+        categories = (
+            ("宏观政策", ("总书记", "习近平", "贺电", "国债", "政策", "经济", "战略", "两岸", "外交")),
+            ("国际局势", ("美国", "伊朗", "中东", "外国", "台湾", "军舰", "非洲")),
+            ("消费金融", ("消费", "花呗", "白条", "月付", "车展", "抢货", "市场")),
+            ("科技产业", ("ai", "航天", "月球", "芯片", "科技", "机器人")),
+            ("体育文娱", ("苏超", "中超", "vs", "日落", "看哭", "全网")),
+            ("社会民生", ("病情", "游客", "健康", "回家", "被罚", "谣言", "楼房")),
+        )
+        lowered = title.lower()
+        for category, keywords in categories:
+            if any(keyword.lower() in lowered for keyword in keywords):
+                return category
+        return "公共舆情"
+
+    def build_article_analysis(self, article: dict[str, Any]) -> str:
+        theme = str(article.get("theme") or "市场波动")
+        region = str(article.get("region") or "全球")
+        source = str(article.get("source") or "未知来源")
+        age_hours = float(article.get("age_hours") or 0)
+        score = int(article.get("score") or 0)
+        freshness = "短线影响更强" if age_hours <= 8 else "更适合当作持续观察线索"
+        score_comment = "市场关注度较高" if score >= 45 else "属于需要结合后续信息验证的方向"
+        return (
+            f"这条海外热点对应的主线是{theme}，落点在{region}市场。"
+            f"从来源看，当前信息来自{source}，{freshness}；从入选分值看，这条内容{score_comment}。"
+            f"对后续研判来说，重点不是单看标题本身，而是继续跟踪它是否会扩散到指数、行业龙头或风险偏好变化。"
+        )
+
+    def build_hot_topic_analysis(self, topic: dict[str, Any]) -> str:
+        category = self.classify_hot_topic(str(topic.get("title") or ""))
+        platform = str(topic.get("platform") or "热榜")
+        rank = topic.get("rank")
+        hot = str(topic.get("hot") or "").strip() or "热度未知"
+        rank_text = f"排名靠前" if isinstance(rank, int) and 0 < rank <= 3 else "持续出现在热榜"
+        return (
+            f"这条国内热点更偏向{category}话题，目前在{platform}{rank_text}。"
+            f"它说明当前舆论关注点正在向这一方向集中，现阶段热度表现为“{hot}”。"
+            f"后续分析重点应放在事件是否继续扩散、是否引出政策解读，或者是否进一步影响公众预期与市场情绪。"
+        )
+
+    def build_summary(self, articles: list[Article], hot_topics: list[HotTopic], hours: int) -> str:
+        foreign_themes = self.top_themes(articles)
+        domestic_topics = self.select_key_hot_topics(hot_topics, limit=3)
+        foreign_text = "、".join(foreign_themes) if foreign_themes else "海外市场波动"
+        domestic_text = "、".join(str(item.get("title") or "") for item in domestic_topics if str(item.get("title") or ""))
+        if articles and domestic_topics:
+            return (
+                f"过去{hours}小时，海外热点主要集中在{foreign_text}，国内舆论场则围绕{domestic_text}等话题升温。"
+                "这份内容会先做总览，再分别拆解国内外热点的核心信息与后续观察点。"
+            )
+        if articles:
+            return f"过去{hours}小时，内容重点集中在海外市场的{foreign_text}，下文将逐条拆解每个热点的影响线索。"
+        if domestic_topics:
+            return f"过去{hours}小时，当前可用内容主要来自国内热榜，热点集中在{domestic_text}，下文按条目展开分析。"
+        return f"过去{hours}小时的数据抓取未成功，本次输出为故障诊断模式。"
+
+    def build_headline_candidates(self, themes: list[str], hot_topics: list[HotTopic]) -> list[str]:
+        foreign_text = "、".join(themes[:2]) if themes else "海外市场"
+        domestic_titles = [str(item.get("title") or "") for item in self.select_key_hot_topics(hot_topics, limit=2)]
+        domestic_text = "、".join(domestic_titles) if domestic_titles else "国内热榜"
+        return [
+            f"国内外热点一起看：{foreign_text}与{domestic_text}，哪些信息最值得跟踪",
+            f"从海外市场到国内热榜，今天最该关注的热点和分析都在这里",
+            f"热点不只罗列，国内外重点事件的总结与分析一次看完",
+        ]
+
+    def build_short_video_script(self, articles: list[Article], hot_topics: list[HotTopic], hours: int) -> str:
+        if not articles and not hot_topics:
+            return f"过去{hours}小时数据抓取未成功，当前内容以故障诊断为主。"
+        foreign_text = "、".join(self.top_themes(articles)[:3]) if articles else "海外暂无有效样本"
+        domestic_titles = [str(item.get("title") or "") for item in self.select_key_hot_topics(hot_topics, limit=2)]
+        domestic_text = "、".join(domestic_titles) if domestic_titles else "国内热榜暂无重点样本"
+        return (
+            f"先看总览，过去{hours}小时海外热点集中在{foreign_text}，"
+            f"国内热榜里更值得跟踪的是{domestic_text}。下面不只做汇总，还会逐条看每个热点背后的信号。"
+        )
+
+    def build_social_post(self, articles: list[Article], hot_topics: list[HotTopic], hours: int) -> str:
+        if not articles and not hot_topics:
+            return f"过去{hours}小时数据抓取失败，建议先排查网络、源站可达性和接口限制。"
+        foreign_text = "、".join(self.top_themes(articles)[:2]) if articles else "海外市场"
+        domestic_titles = [str(item.get("title") or "") for item in self.select_key_hot_topics(hot_topics, limit=1)]
+        domestic_text = domestic_titles[0] if domestic_titles else "国内热榜"
+        return f"今天这版内容把海外的{foreign_text}和国内的{domestic_text}放到一起看，不只列热点，也补上每条热点的分析角度。"
+
     def build_wechat_article_content(self, payload: dict) -> str:
+        key_hot_topics = self.select_key_hot_topics(payload.get("hot_topics", []), limit=8)
         parts = [
-            f"<h1>{html_escape('海外热点股市日报')}</h1>",
+            f"<h1>{html_escape('国内外热点总结分析')}</h1>",
             f"<p><strong>生成时间：</strong>{html_escape(self.format_iso_datetime(str(payload.get('generated_at') or '')))}</p>",
             f"<p><strong>统计窗口：</strong>近 {int(payload.get('window_hours') or 0)} 小时</p>",
             f"<p><strong>一句话概览：</strong>{html_escape(str(payload.get('summary') or ''))}</p>",
@@ -306,7 +440,7 @@ class DigestRenderer:
             parts.append(f"<li>{html_escape(str(title))}</li>")
         parts.append("</ul>")
 
-        parts.append("<h2>海外热点清单</h2>")
+        parts.append("<h2>海外热点分析</h2>")
         articles = payload.get("articles", [])
         if articles:
             for index, article in enumerate(articles, start=1):
@@ -318,21 +452,21 @@ class DigestRenderer:
                 published_at = html_escape(self.format_iso_datetime(str(article.get("published_at") or "")))
                 score = html_escape(str(article.get("score") or ""))
                 link = html_escape(str(article.get("link") or ""))
+                analysis = html_escape(self.build_article_analysis(article))
                 parts.append(
                     f"<p><strong>{index}. [{theme}] {title}</strong><br/>"
                     f"区域：{region} | 来源：{source} | 热度分：{score}<br/>"
                     f"发布时间：{published_at}<br/>"
                     f"入选理由：{rationale}<br/>"
+                    f"分析：{analysis}<br/>"
                     f"<a href=\"{link}\">查看原文</a></p>"
                 )
         else:
             parts.append("<p>当前没有可用的海外热点条目。</p>")
 
-        hot_topics = payload.get("hot_topics", [])
-        if hot_topics:
-            parts.append("<h2>国内热榜观察</h2>")
-            parts.append("<ul>")
-            for topic in hot_topics[:12]:
+        if key_hot_topics:
+            parts.append("<h2>国内热点分析</h2>")
+            for index, topic in enumerate(key_hot_topics, start=1):
                 platform = html_escape(str(topic.get("platform") or ""))
                 rank = topic.get("rank")
                 rank_text = f"#{rank}" if isinstance(rank, int) and rank > 0 else ""
@@ -340,8 +474,13 @@ class DigestRenderer:
                 hot = html_escape(str(topic.get("hot") or ""))
                 suffix_parts = [part for part in (platform, rank_text, hot) if part]
                 suffix = f"（{' | '.join(suffix_parts)}）" if suffix_parts else ""
-                parts.append(f"<li>{title}{html_escape(suffix)}</li>")
-            parts.append("</ul>")
+                url = html_escape(str(topic.get("url") or ""))
+                analysis = html_escape(self.build_hot_topic_analysis(topic))
+                link_html = f"<a href=\"{url}\">查看热榜</a>" if url else ""
+                parts.append(
+                    f"<p><strong>{index}. {title}{html_escape(suffix)}</strong><br/>"
+                    f"分析：{analysis}<br/>{link_html}</p>"
+                )
 
         short_video_script = str(payload.get("short_video_script") or "").strip()
         if short_video_script:
@@ -382,31 +521,6 @@ class DigestRenderer:
         ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
         return [name for name, _ in ranked[:limit]]
 
-    def build_summary(self, articles: list[Article], hours: int) -> str:
-        themes = self.top_themes(articles)
-        theme_text = "、".join(themes) if themes else "市场波动"
-        return f"先说结论，过去{hours}小时海外市场不是普涨普跌那么简单，真正带节奏的是{theme_text}。"
-
-    def build_headline_candidates(self, themes: list[str]) -> list[str]:
-        theme_text = "、".join(themes[:2]) if themes else "海外股市"
-        return [
-            f"隔夜外盘真正的主线出来了，{theme_text}正在带节奏",
-            f"别只看指数涨跌，{theme_text}才是海外市场核心变量",
-            "开盘前必须先看这几条，海外资金正在重押这些方向",
-        ]
-
-    def build_short_video_script(self, articles: list[Article], hours: int) -> str:
-        if not articles:
-            return f"过去{hours}小时外盘抓取未成功，当前处于故障诊断模式。"
-        themes = self.top_themes(articles)
-        return f"先说判断，过去{hours}小时外盘主线集中在{'、'.join(themes)}。"
-
-    def build_social_post(self, articles: list[Article], hours: int) -> str:
-        if not articles:
-            return f"盘前提示：过去{hours}小时海外市场数据抓取失败，请先排查网络与数据源访问限制。"
-        themes = self.top_themes(articles)
-        return f"盘前先给结论：过去{hours}小时，海外市场主线是{'、'.join(themes)}。"
-
     def build_payload(
         self,
         articles: list[Article],
@@ -417,11 +531,7 @@ class DigestRenderer:
         hot_topic_failures: list[str],
     ) -> dict:
         themes = self.top_themes(articles)
-        summary = self.build_summary(articles, hours)
-        if not articles and hot_topics:
-            summary = "先说结论，当前内容仅使用国内来源。"
-        if not articles and not hot_topics:
-            summary = "过去24小时的数据抓取未成功，本次输出为故障诊断模式。"
+        summary = self.build_summary(articles, hot_topics, hours)
 
         return {
             "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -429,9 +539,9 @@ class DigestRenderer:
             "source_urls": source_urls,
             "themes": themes,
             "summary": summary,
-            "headline_candidates": self.build_headline_candidates(themes),
-            "short_video_script": self.build_short_video_script(articles, hours),
-            "social_post": self.build_social_post(articles, hours),
+            "headline_candidates": self.build_headline_candidates(themes, hot_topics),
+            "short_video_script": self.build_short_video_script(articles, hot_topics, hours),
+            "social_post": self.build_social_post(articles, hot_topics, hours),
             "articles": [asdict(article) for article in articles],
             "fetch_failures": failures,
             "hot_topics": [asdict(topic) for topic in hot_topics],
@@ -439,13 +549,14 @@ class DigestRenderer:
         }
 
     def build_markdown(self, payload: dict) -> str:
+        key_hot_topics = self.select_key_hot_topics(payload.get("hot_topics", []), limit=8)
         lines = [
-            "# 海外热点股市信息日报",
+            "# 国内外热点总结分析",
             "",
             f"生成时间：{self.format_iso_datetime(payload['generated_at'])}",
             f"统计窗口：近 {payload['window_hours']} 小时",
             "",
-            "## 一句话概览",
+            "## 总体概览",
             payload["summary"],
             "",
             "## 当前主线",
@@ -466,22 +577,24 @@ class DigestRenderer:
             lines.append(f"- {title}")
 
         lines.extend(["", "## 短视频口播文案", payload["short_video_script"], "", "## 社媒短文案", payload["social_post"]])
-        lines.extend(["", "## 热点清单"])
+        lines.extend(["", "## 海外热点分析"])
 
         for index, article in enumerate(payload["articles"], start=1):
             lines.append(f"{index}. [{article['theme']}] {article['title']}")
             lines.append(f"来源：{article['source']} | 区域：{article['region']} | 热度分：{article['score']}")
             lines.append(f"发布时间：{self.format_iso_datetime(article['published_at'])} | 入选理由：{article['rationale']}")
+            lines.append(f"分析：{self.build_article_analysis(article)}")
             lines.append(f"链接：{article['link']}")
             lines.append("")
 
-        if payload["hot_topics"]:
-            lines.append("## 国内热榜")
-            for topic in payload["hot_topics"]:
+        if key_hot_topics:
+            lines.append("## 国内热点分析")
+            for topic in key_hot_topics:
                 rank = topic.get("rank")
                 rank_text = f"#{rank}" if isinstance(rank, int) and rank > 0 else "未标注排名"
                 hot = topic.get("hot") or "热度未知"
                 lines.append(f"- [{topic['platform']}] {topic['title']} | 排名：{rank_text} | 热度：{hot}")
+                lines.append(f"  分析：{self.build_hot_topic_analysis(topic)}")
                 if topic.get("url"):
                     lines.append(f"  链接：{topic['url']}")
             lines.append("")
@@ -508,6 +621,7 @@ class DigestLLMRefiner:
 
     def __init__(self, args) -> None:
         self.enabled = bool(getattr(args, "llm_enabled", False))
+        self.provider = str(getattr(args, "llm_provider", "") or "openai").strip() or "openai"
         self.base_url = str(getattr(args, "llm_base_url", "") or "").strip() or "https://api.openai.com/v1"
         self.api_key = str(getattr(args, "llm_api_key", "") or "").strip()
         self.model = str(getattr(args, "llm_model", "") or "").strip()
@@ -520,6 +634,93 @@ class DigestLLMRefiner:
             getattr(args, "llm_copywriting_prompt_md", DEFAULT_LLM_COPYWRITING_PROMPT_MD)
             or DEFAULT_LLM_COPYWRITING_PROMPT_MD
         )
+        llm_config_path = str(getattr(args, "llm_config", "") or "").strip()
+        self.llm_config_path = Path(llm_config_path) if llm_config_path else None
+        self.llm_config = self._load_llm_config()
+
+    def _load_llm_config(self) -> dict[str, Any]:
+        if not self.llm_config_path:
+            return {}
+        try:
+            content = self.llm_config_path.read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            LOGGER.warning("llm config json not found, use built-in strategy: %s", exc)
+            return {}
+        if not content:
+            LOGGER.warning("llm config json is empty, use built-in strategy")
+            return {}
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError as exc:
+            LOGGER.warning("llm config json invalid, use built-in strategy: %s", exc)
+            return {}
+        if not isinstance(parsed, dict):
+            LOGGER.warning("llm config json root is not object, use built-in strategy")
+            return {}
+        return parsed
+
+    def _build_article_scoring_policy(self) -> dict[str, Any]:
+        section = self.llm_config.get("article_scoring")
+        if not isinstance(section, dict):
+            return {}
+
+        policy: dict[str, Any] = {}
+        goal = str(section.get("goal") or "").strip()
+        if goal:
+            policy["goal"] = goal
+
+        instruction = str(section.get("selection_instruction") or "").strip()
+        if instruction:
+            policy["selection_instruction"] = instruction
+
+        raw_dimensions = section.get("dimensions")
+        dimensions: list[dict[str, Any]] = []
+        if isinstance(raw_dimensions, list):
+            for item in raw_dimensions:
+                if not isinstance(item, dict):
+                    continue
+                name = str(item.get("name") or "").strip()
+                description = str(item.get("description") or "").strip()
+                weight_value = item.get("weight")
+                if not name:
+                    continue
+                dimension: dict[str, Any] = {"name": name}
+                try:
+                    dimension["weight"] = int(weight_value)
+                except (TypeError, ValueError):
+                    pass
+                if description:
+                    dimension["description"] = description
+                dimensions.append(dimension)
+        if dimensions:
+            policy["dimensions"] = dimensions
+        return policy
+
+    def _build_copywriting_policy(self) -> dict[str, Any]:
+        section = self.llm_config.get("copywriting")
+        if not isinstance(section, dict):
+            return {}
+
+        policy: dict[str, Any] = {}
+        audience = str(section.get("audience") or "").strip()
+        if audience:
+            policy["audience"] = audience
+
+        tone = str(section.get("tone") or "").strip()
+        if tone:
+            policy["tone"] = tone
+
+        raw_requirements = section.get("requirements")
+        requirements: list[str] = []
+        if isinstance(raw_requirements, list):
+            for item in raw_requirements:
+                text = str(item or "").strip()
+                if text:
+                    requirements.append(text)
+        if requirements:
+            policy["requirements"] = requirements
+
+        return policy
 
     def can_run(self) -> bool:
         return self.enabled and bool(self.api_key) and bool(self.model)
@@ -540,6 +741,8 @@ class DigestLLMRefiner:
         ]
         template = self._load_article_scoring_prompt_template()
         system_prompt, user_prompt_template = self._split_prompt_template(template)
+        policy = self._build_article_scoring_policy()
+        policy_json = json.dumps(policy, ensure_ascii=False, indent=2) if policy else "{}"
         user_prompt = user_prompt_template.replace(
             "{{select_limit}}",
             str(select_limit),
@@ -549,7 +752,16 @@ class DigestLLMRefiner:
         ).replace(
             "{{candidates_json}}",
             json.dumps(candidates, ensure_ascii=False, indent=2),
+        ).replace(
+            "{{scoring_policy_json}}",
+            policy_json,
         )
+        if policy and "{{scoring_policy_json}}" not in user_prompt_template:
+            user_prompt = (
+                f"{user_prompt}\n\n"
+                "补充评分策略（来自 llm-config）：\n"
+                f"{policy_json}"
+            )
         return [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -732,6 +944,9 @@ class DigestLLMRefiner:
 
     def _build_messages(self, payload: dict) -> list[dict[str, str]]:
         context = self._build_context(payload)
+        copywriting_policy = self._build_copywriting_policy()
+        if copywriting_policy:
+            context["copywriting_policy"] = copywriting_policy
         schema_hint = {
             "summary": "string, 1 sentence",
             "headline_candidates": ["string", "string", "string"],
@@ -740,13 +955,23 @@ class DigestLLMRefiner:
         }
         template = self._load_copywriting_prompt_template()
         system_prompt, user_prompt_template = self._split_prompt_template(template)
+        policy_json = json.dumps(copywriting_policy, ensure_ascii=False, indent=2) if copywriting_policy else "{}"
         user_prompt = user_prompt_template.replace(
             "{{output_schema}}",
             json.dumps(schema_hint, ensure_ascii=False, indent=2),
         ).replace(
             "{{input_data}}",
             json.dumps(context, ensure_ascii=False, indent=2),
+        ).replace(
+            "{{copywriting_policy_json}}",
+            policy_json,
         )
+        if copywriting_policy and "{{copywriting_policy_json}}" not in user_prompt_template:
+            user_prompt = (
+                f"{user_prompt}\n\n"
+                "补充改写策略（来自 llm-config）：\n"
+                f"{policy_json}"
+            )
         return [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -770,8 +995,21 @@ class DigestLLMRefiner:
             },
             method="POST",
         )
-        with urlopen(request, timeout=self.timeout) as response:
-            raw = json.loads(response.read().decode("utf-8"))
+        try:
+            with urlopen(request, timeout=self.timeout) as response:
+                raw = json.loads(response.read().decode("utf-8"))
+        except HTTPError as exc:
+            response_text = ""
+            try:
+                response_text = exc.read().decode("utf-8", errors="ignore").strip()
+            except Exception:  # noqa: BLE001
+                response_text = ""
+            detail = response_text or exc.reason or "no response body"
+            raise RuntimeError(
+                "LLM request failed "
+                f"provider={self.provider} model={self.model} base_url={self.base_url} "
+                f"status={exc.code} detail={detail}"
+            ) from exc
         choices = raw.get("choices")
         if not isinstance(choices, list) or not choices:
             raise RuntimeError(f"LLM response missing choices: {raw}")

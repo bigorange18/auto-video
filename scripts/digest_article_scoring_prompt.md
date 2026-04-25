@@ -11,6 +11,9 @@
 3. 最终至少返回前 {{select_limit}} 条排序结果。
 4. 如果多条新闻价值接近，优先保留更能解释市场主线的内容。
 
+评分策略配置（来自 llm-config）：
+{{scoring_policy_json}}
+
 输出 JSON 结构：
 {{output_schema}}
 
