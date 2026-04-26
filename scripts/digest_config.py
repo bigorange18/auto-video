@@ -18,6 +18,12 @@ class HotTopicSource:
     source_type: str
 
 
+@dataclass(frozen=True)
+class DomesticRssSource:
+    name: str
+    url: str
+
+
 USER_AGENT = "Mozilla/5.0 (compatible; auto-video/1.0; +https://github.com/)"
 DEFAULT_OUTPUT_JSON = Path("output/foreign_market_hotspots.json")
 DEFAULT_OUTPUT_MD = Path("output/foreign_market_copy.md")
@@ -42,6 +48,8 @@ WECHAT_COVER_WIDTH = 900
 WECHAT_COVER_HEIGHT = 500
 WECHAT_RETRYABLE_DRAFT_ERRCODES = {40007, 53401, 53402}
 HOT_TOPIC_API_BASE = "https://dabenshi.cn/other/api/hot.php?type="
+WSCN_LIVES_API_URL = "https://api-one-wscn.awtmt.com/apiv1/content/lives?channel=global-channel&page=1&limit=30"
+BAIDU_HOT_API_TYPE = "baidu"
 WECHAT_COVER_MIN_WIDTH = 640
 WECHAT_COVER_MIN_HEIGHT = 360
 
@@ -60,6 +68,19 @@ FINANCE_IMAGE_HOST_KEYWORDS: tuple[str, ...] = (
 
 
 FEEDS: tuple[FeedSource, ...] = (
+    FeedSource(
+        label="US7",
+        urls=(
+            "https://www.nasdaq.com/feed/rssoutbound?symbol=AAPL",
+            "https://www.nasdaq.com/feed/rssoutbound?symbol=MSFT",
+            "https://www.nasdaq.com/feed/rssoutbound?symbol=GOOGL",
+            "https://www.nasdaq.com/feed/rssoutbound?symbol=AMZN",
+            "https://www.nasdaq.com/feed/rssoutbound?symbol=NVDA",
+            "https://www.nasdaq.com/feed/rssoutbound?symbol=META",
+            "https://www.nasdaq.com/feed/rssoutbound?symbol=TSLA",
+        ),
+        weight=4,
+    ),
     FeedSource(
         label="US",
         urls=(
@@ -102,6 +123,7 @@ FEEDS: tuple[FeedSource, ...] = (
 
 
 THEMES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("美股七巨头", ("apple", "microsoft", "alphabet", "google", "amazon", "nvidia", "meta", "tesla")),
     ("利率与美联储", ("fed", "rate", "rates", "treasury", "bond", "yield", "powell")),
     ("科技与芯片", ("ai", "chip", "chips", "semiconductor", "nvidia", "tsmc", "tech")),
     ("财报与业绩", ("earnings", "profit", "revenue", "guidance", "quarter", "results")),
@@ -125,8 +147,25 @@ MAJOR_SOURCES = {
 }
 
 
+MAGNIFICENT_SEVEN_MAP: dict[str, tuple[str, ...]] = {
+    "Apple": ("apple", "aapl"),
+    "Microsoft": ("microsoft", "msft"),
+    "Alphabet": ("alphabet", "google", "googl", "goog"),
+    "Amazon": ("amazon", "amzn"),
+    "Nvidia": ("nvidia", "nvda"),
+    "Meta": ("meta", "facebook", "fb"),
+    "Tesla": ("tesla", "tsla"),
+}
+
+
 HOT_TOPIC_APIS: tuple[HotTopicSource, ...] = (
     HotTopicSource(name="抖音热点", source_type="douyinhot"),
     HotTopicSource(name="头条热榜", source_type="toutiaoHot"),
     HotTopicSource(name="百度热搜", source_type="baidu"),
+)
+
+
+DOMESTIC_RSS_SOURCES: tuple[DomesticRssSource, ...] = (
+    DomesticRssSource(name="中新网财经", url="https://www.chinanews.com.cn/rss/finance.xml"),
+    DomesticRssSource(name="中新网滚动", url="https://www.chinanews.com.cn/rss/scroll-news.xml"),
 )
