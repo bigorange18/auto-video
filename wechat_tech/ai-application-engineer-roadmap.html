@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI应用工程师学习路线图</title>
+  <style>
+    :root {
+      --bg: #f4efe7;
+      --paper: rgba(255, 251, 246, 0.92);
+      --ink: #1d2433;
+      --muted: #5e6472;
+      --line: rgba(29, 36, 51, 0.1);
+      --accent: #e25b45;
+      --accent-2: #1c8b84;
+      --accent-3: #e0a93b;
+      --accent-soft: rgba(226, 91, 69, 0.12);
+      --shadow: 0 18px 50px rgba(59, 47, 33, 0.12);
+      --radius: 24px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: "Noto Serif SC", "Source Han Serif SC", "PingFang SC", serif;
+      background:
+        radial-gradient(circle at top left, rgba(28, 139, 132, 0.18), transparent 24%),
+        radial-gradient(circle at 85% 15%, rgba(224, 169, 59, 0.18), transparent 18%),
+        linear-gradient(180deg, #f7f2ea 0%, var(--bg) 52%, #eee5d7 100%);
+    }
+
+    .shell {
+      width: min(1200px, calc(100% - 28px));
+      margin: 0 auto;
+      padding: 26px 0 64px;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      border-radius: 32px;
+      background: linear-gradient(135deg, rgba(255, 250, 244, 0.97), rgba(255, 246, 235, 0.86));
+      border: 1px solid rgba(226, 91, 69, 0.14);
+      box-shadow: var(--shadow);
+      padding: 34px;
+    }
+
+    .hero::before,
+    .hero::after {
+      content: "";
+      position: absolute;
+      border-radius: 999px;
+      pointer-events: none;
+    }
+
+    .hero::before {
+      width: 320px;
+      height: 320px;
+      right: -90px;
+      top: -110px;
+      background: radial-gradient(circle, rgba(226, 91, 69, 0.20), transparent 68%);
+    }
+
+    .hero::after {
+      width: 360px;
+      height: 360px;
+      left: -130px;
+      bottom: -200px;
+      background: radial-gradient(circle, rgba(28, 139, 132, 0.18), transparent 72%);
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1.25fr 0.75fr;
+      gap: 26px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-size: 14px;
+      letter-spacing: 0.08em;
+    }
+
+    h1, h2, h3, h4 {
+      margin: 0;
+      font-weight: 700;
+    }
+
+    h1 {
+      margin-top: 16px;
+      font-size: clamp(34px, 6vw, 58px);
+      line-height: 1.08;
+      max-width: 12ch;
+    }
+
+    .hero p {
+      margin: 18px 0 0;
+      color: var(--muted);
+      line-height: 1.8;
+      font-size: 16px;
+      max-width: 60ch;
+    }
+
+    .hero-side {
+      display: grid;
+      gap: 14px;
+      align-self: end;
+    }
+
+    .metric {
+      background: rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(29, 36, 51, 0.08);
+      border-radius: 20px;
+      padding: 18px;
+      backdrop-filter: blur(8px);
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 28px;
+      color: var(--ink);
+      margin-bottom: 8px;
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    .quick-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .quick-nav a {
+      text-decoration: none;
+      color: var(--ink);
+      border: 1px solid rgba(29, 36, 51, 0.1);
+      background: rgba(255, 255, 255, 0.72);
+      padding: 10px 14px;
+      border-radius: 999px;
+      font-size: 14px;
+    }
+
+    .section {
+      margin-top: 24px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 26px;
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: end;
+      margin-bottom: 20px;
+    }
+
+    .section-head p {
+      margin: 10px 0 0;
+      color: var(--muted);
+      line-height: 1.8;
+      max-width: 68ch;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      background: rgba(28, 139, 132, 0.1);
+      color: var(--accent-2);
+      white-space: nowrap;
+    }
+
+    .skill-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .skill-card {
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(29, 36, 51, 0.08);
+      padding: 18px;
+    }
+
+    .skill-card h3 {
+      font-size: 22px;
+      margin-bottom: 10px;
+    }
+
+    .skill-card p {
+      margin: 0 0 14px;
+      color: var(--muted);
+      line-height: 1.75;
+    }
+
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 7px 11px;
+      border-radius: 999px;
+      font-size: 13px;
+      background: rgba(226, 91, 69, 0.08);
+      color: var(--accent);
+    }
+
+    .phase-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .phase-card {
+      border: 1px solid rgba(29, 36, 51, 0.08);
+      border-radius: 22px;
+      padding: 18px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.84), rgba(255,255,255,0.65));
+    }
+
+    .phase-card h3 {
+      font-size: 20px;
+      margin-bottom: 10px;
+    }
+
+    .phase-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.75;
+    }
+
+    .phase-card ul,
+    .week-body ul,
+    .target-list {
+      margin: 12px 0 0;
+      padding-left: 20px;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+
+    .phase-card li,
+    .week-body li,
+    .target-list li {
+      margin: 4px 0;
+    }
+
+    .timeline {
+      display: grid;
+      gap: 18px;
+    }
+
+    .month {
+      border: 1px solid rgba(29, 36, 51, 0.08);
+      border-radius: 24px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.7);
+    }
+
+    .month-head {
+      padding: 18px 20px;
+      background: linear-gradient(90deg, rgba(226, 91, 69, 0.12), rgba(28, 139, 132, 0.08));
+      border-bottom: 1px solid rgba(29, 36, 51, 0.06);
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: center;
+    }
+
+    .month-head p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .weeks {
+      padding: 16px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .week {
+      display: grid;
+      grid-template-columns: 112px 1fr;
+      gap: 16px;
+      border: 1px solid rgba(29, 36, 51, 0.08);
+      border-radius: 18px;
+      padding: 16px;
+      background: rgba(255,255,255,0.78);
+    }
+
+    .week-index {
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(226,91,69,0.12), rgba(224,169,59,0.12));
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      font-size: 18px;
+      font-weight: 700;
+      min-height: 94px;
+    }
+
+    .week-body h4 {
+      font-size: 22px;
+      margin-bottom: 6px;
+    }
+
+    .week-body p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.75;
+    }
+
+    .deliverable {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: rgba(28, 139, 132, 0.08);
+      color: #255651;
+      line-height: 1.75;
+      font-size: 14px;
+    }
+
+    .project-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .project-card {
+      padding: 18px;
+      border-radius: 20px;
+      border: 1px solid rgba(29, 36, 51, 0.08);
+      background: rgba(255,255,255,0.76);
+    }
+
+    .project-card p {
+      margin: 10px 0 0;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+
+    .footer-note {
+      margin-top: 20px;
+      padding: 16px 18px;
+      border-radius: 18px;
+      background: rgba(226, 91, 69, 0.06);
+      color: var(--muted);
+      line-height: 1.8;
+      font-size: 14px;
+    }
+
+    @media (max-width: 1024px) {
+      .hero-grid,
+      .skill-grid,
+      .phase-grid,
+      .project-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .shell {
+        width: min(100% - 18px, 1200px);
+        padding-top: 18px;
+      }
+
+      .hero,
+      .section {
+        padding: 20px;
+      }
+
+      .week {
+        grid-template-columns: 1fr;
+      }
+
+      .month-head,
+      .section-head {
+        display: block;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div class="hero-grid">
+        <div>
+          <div class="eyebrow">AI应用工程师 · 技能地图 · 24周学习路线</div>
+          <h1>从工程基础到 Agent 落地，一步步靠近岗位要求</h1>
+          <p>
+            这份路线图不是泛泛而谈的“学 RAG、学 Agent”，而是按招聘岗位真正看重的能力拆成 24 周。
+            目标是让你 6 个月后能拿出可讲、可演示、可写进简历的项目，而不是只学一堆概念名词。
+          </p>
+          <div class="quick-nav">
+            <a href="#skills">技能点地图</a>
+            <a href="#phases">六个月阶段目标</a>
+            <a href="#roadmap">24周详细步骤</a>
+            <a href="#projects">项目产出</a>
+          </div>
+        </div>
+        <div class="hero-side">
+          <div class="metric">
+            <strong>24 周</strong>
+            <span>按上班族节奏设计，每周都有明确学习主题、练习内容和阶段产出。</span>
+          </div>
+          <div class="metric">
+            <strong>3 个核心项目</strong>
+            <span>知识库问答系统、Agent 应用、AI 内容生产流水线，直接对应岗位需求。</span>
+          </div>
+          <div class="metric">
+            <strong>6 大能力块</strong>
+            <span>后端工程、LLM 应用、RAG、Agent、工程化、评测优化，缺一块都很难拿高薪岗位。</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="skills">
+      <div class="section-head">
+        <div>
+          <h2>AI应用工程师技能点地图</h2>
+          <p>你找的这些岗位，名字不同，但核心能力是高度收敛的。下面这 6 块基本就是岗位 JD 的能力骨架。</p>
+        </div>
+        <span class="badge">先补工程，再补模型应用</span>
+      </div>
+
+      <div class="skill-grid">
+        <article class="skill-card">
+          <h3>1. 后端工程基础</h3>
+          <p>AI 应用工程师首先还是工程师。你得能把模型能力做成服务，而不是只会在 notebook 里跑 demo。</p>
+          <div class="chip-row">
+            <span class="chip">Python</span>
+            <span class="chip">FastAPI</span>
+            <span class="chip">MySQL / PostgreSQL</span>
+            <span class="chip">Redis</span>
+            <span class="chip">Docker</span>
+            <span class="chip">Linux</span>
+          </div>
+        </article>
+
+        <article class="skill-card">
+          <h3>2. 大模型应用基础</h3>
+          <p>要懂 Token、上下文窗口、采样参数、Prompt、结构化输出、Function Calling，知道模型是怎么工作的，也知道它会怎么出错。</p>
+          <div class="chip-row">
+            <span class="chip">Prompt</span>
+            <span class="chip">Structured Output</span>
+            <span class="chip">Function Calling</span>
+            <span class="chip">Embedding</span>
+            <span class="chip">幻觉与约束</span>
+          </div>
+        </article>
+
+        <article class="skill-card">
+          <h3>3. RAG 与知识库</h3>
+          <p>这是最常见的业务场景。重点不是“会向量库”几个字，而是能搭出文档处理、切块、召回、重排、生成、引用整条链路。</p>
+          <div class="chip-row">
+            <span class="chip">Chunking</span>
+            <span class="chip">向量检索</span>
+            <span class="chip">重排</span>
+            <span class="chip">引用来源</span>
+            <span class="chip">多轮上下文</span>
+          </div>
+        </article>
+
+        <article class="skill-card">
+          <h3>4. Agent 与工作流</h3>
+          <p>岗位要的是“会执行任务的系统”，不是普通聊天壳。你要会工具调用、任务拆解、状态管理、记忆、工作流编排和失败兜底。</p>
+          <div class="chip-row">
+            <span class="chip">Tool Calling</span>
+            <span class="chip">ReAct</span>
+            <span class="chip">LangGraph</span>
+            <span class="chip">Memory</span>
+            <span class="chip">Workflow</span>
+          </div>
+        </article>
+
+        <article class="skill-card">
+          <h3>5. 工程化与平台化</h3>
+          <p>很多岗位高薪部分不在“会用模型”，而在“能把系统稳定跑起来”。这里包括权限、日志、监控、缓存、成本和任务系统。</p>
+          <div class="chip-row">
+            <span class="chip">权限</span>
+            <span class="chip">日志</span>
+            <span class="chip">监控</span>
+            <span class="chip">限流</span>
+            <span class="chip">成本控制</span>
+            <span class="chip">任务队列</span>
+          </div>
+        </article>
+
+        <article class="skill-card">
+          <h3>6. 评测与持续优化</h3>
+          <p>你不只是要做出来，还要知道它是不是好、为什么不好、怎么改进。这是你和“会调 API 的人”拉开差距的关键。</p>
+          <div class="chip-row">
+            <span class="chip">Benchmark</span>
+            <span class="chip">测试集</span>
+            <span class="chip">LLM-as-a-Judge</span>
+            <span class="chip">A/B 测试</span>
+            <span class="chip">回归评测</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="phases">
+      <div class="section-head">
+        <div>
+          <h2>六个月阶段目标</h2>
+          <p>不要把 24 周看成孤立小任务。更合理的理解是 6 个阶段，每个月完成一个主主题和一个阶段性里程碑。</p>
+        </div>
+        <span class="badge">每月必须有可演示产物</span>
+      </div>
+
+      <div class="phase-grid">
+        <article class="phase-card">
+          <h3>第 1 个月：后端工程打底</h3>
+          <p>目标是把自己从“能写脚本”升级成“能写服务”。</p>
+          <ul>
+            <li>掌握 Python 工程化写法</li>
+            <li>能用 FastAPI 写接口服务</li>
+            <li>会接数据库、缓存和日志</li>
+            <li>会用 Docker 跑项目</li>
+          </ul>
+        </article>
+
+        <article class="phase-card">
+          <h3>第 2 个月：大模型应用基础</h3>
+          <p>目标是看懂应用层原理，知道 Prompt、Tool Calling 和 RAG 是怎么连起来的。</p>
+          <ul>
+            <li>理解 LLM 调用和结构化输出</li>
+            <li>会做简单工具调用 demo</li>
+            <li>完成最小知识库问答原型</li>
+          </ul>
+        </article>
+
+        <article class="phase-card">
+          <h3>第 3 个月：RAG 项目落地</h3>
+          <p>目标是做出企业知识库问答系统 V1，这是最典型、最能讲的 AI 应用项目之一。</p>
+          <ul>
+            <li>文档导入与切块</li>
+            <li>向量检索和引用来源</li>
+            <li>回答生成与无答案兜底</li>
+          </ul>
+        </article>
+
+        <article class="phase-card">
+          <h3>第 4 个月：Agent 项目落地</h3>
+          <p>目标是做出能执行任务的 Agent，而不是只能对话的聊天页面。</p>
+          <ul>
+            <li>手写工具调用 Agent</li>
+            <li>状态记录和失败重试</li>
+            <li>接入简单工作流框架</li>
+          </ul>
+        </article>
+
+        <article class="phase-card">
+          <h3>第 5 个月：平台化和稳定性</h3>
+          <p>目标是把 demo 做成“像产品”的系统，开始补足用户、任务、日志、监控和成本控制。</p>
+          <ul>
+            <li>多用户和权限模型</li>
+            <li>异步任务系统</li>
+            <li>日志、缓存、调用统计</li>
+          </ul>
+        </article>
+
+        <article class="phase-card">
+          <h3>第 6 个月：评测和求职准备</h3>
+          <p>目标是让项目可量化、可讲述、可面试，把能力真正转换成求职资产。</p>
+          <ul>
+            <li>建立评测集和对比实验</li>
+            <li>整理项目架构和技术选型</li>
+            <li>准备简历和面试讲稿</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="roadmap">
+      <div class="section-head">
+        <div>
+          <h2>24 周详细学习步骤</h2>
+          <p>这部分按周展开，每周都给你一个学习主题、应该掌握的内容和本周必须做出来的东西。执行上最重要的原则是：每周都要有代码产物。</p>
+        </div>
+        <span class="badge">工作日 1.5 到 2 小时，周末 4 到 6 小时</span>
+      </div>
+
+      <div class="timeline">
+        <section class="month">
+          <div class="month-head">
+            <div>
+              <h3>第 1 个月 · 工程地基</h3>
+              <p>把脚本思维改成服务思维，建立 AI 应用工程师真正需要的后端基础。</p>
+            </div>
+            <span class="badge">目标：搭起一个可部署 API 服务</span>
+          </div>
+          <div class="weeks">
+            <article class="week">
+              <div class="week-index">第 1 周</div>
+              <div class="week-body">
+                <h4>Python 工程化基础</h4>
+                <p>重点补 dataclass、typing、pathlib、logging、异常处理、argparse、项目目录结构。把“能跑”改成“可维护”。</p>
+                <ul>
+                  <li>学会拆模块，而不是把逻辑堆在一个脚本里</li>
+                  <li>学会做配置和环境变量管理</li>
+                  <li>学会写基础 README 和运行说明</li>
+                </ul>
+                <div class="deliverable">本周产出：做一个命令行工具骨架，包含配置、日志、参数解析、输入输出目录。</div>
+              </div>
+            </article>
+            <article class="week">
+              <div class="week-index">第 2 周</div>
+              <div class="week-body">
+                <h4>FastAPI 和接口服务</h4>
+                <p>重点理解请求、响应、状态码、Pydantic 校验、接口分层，以及如何把逻辑封到服务层。</p>
+                <ul>
+                  <li>写健康检查接口</li>
+                  <li>写创建任务、查询任务、查询结果接口</li>
+                  <li>把日志接进接口调用流程</li>
+                </ul>
+                <div class="deliverable">本周产出：做一个最小 API 服务，至少有 3 个接口，并能在本地启动。</div>
+              </div>
+            </article>
+            <article class="week">
+              <div class="week-index">第 3 周</div>
+              <div class="week-body">
+                <h4>数据库和缓存</h4>
+                <p>补 MySQL 或 PostgreSQL 基础，再补 Redis。目标是理解“状态存储”而不是只会 print 输出。</p>
+                <ul>
+                  <li>设计一张任务表和一张结果表</li>
+                  <li>理解 Redis 在缓存和任务状态中的作用</li>
+                  <li>给接口接上数据库读写</li>
+                </ul>
+                <div class="deliverable">本周产出：让你的服务能把任务、草稿或执行记录存到数据库。</div>
+              </div>
+            </article>
+            <article class="week">
+              <div class="week-index">第 4 周</div>
+              <div class="week-body">
+                <h4>Docker、Linux 和部署最小闭环</h4>
+                <p>把服务做成可部署形态。你不需要一开始就上复杂云平台，但至少要能 Docker 化并在 Linux 环境里跑起来。</p>
+                <ul>
+                  <li>写 Dockerfile</li>
+                  <li>学会环境变量注入</li>
+                  <li>学会看日志和基本排错</li>
+                </ul>
+                <div class="deliverable">本周产出：你的 API 服务可以通过 Docker 启动，并写清启动步骤。</div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="month">
+          <div class="month-head">
+            <div>
+              <h3>第 2 个月 · 大模型应用基础</h3>
+              <p>这个阶段不卷底层训练，重点是把应用层链路看透，知道模型接口、Prompt、结构化输出、工具调用和 Embedding 是怎么连接的。</p>
+            </div>
+            <span class="badge">目标：做出最小 LLM 应用 demo</span>
+          </div>
+          <div class="weeks">
+            <article class="week">
+              <div class="week-index">第 5 周</div>
+              <div class="week-body">
+                <h4>LLM 调用基础</h4>
+                <p>理解 Token、上下文窗口、temperature、top_p、system prompt、user prompt。重点是知道这些参数为什么影响输出稳定性。</p>
+                <ul>
+                  <li>用一个模型接口跑几组不同参数实验</li>
+                  <li>观察回答长度、发散程度和稳定性变化</li>
+                  <li>学会保存原始响应方便排错</li>
+                </ul>
+                <div class="deliverable">本周产出：一个最小 LLM 调用脚本和一份参数实验记录。</div>
+              </div>
+            </article>
+            <article class="week">
+              <div class="week-index">第 6 周</div>
+              <div class="week-body">
+                <h4>Prompt 设计和结构化输出</h4>
+                <p>重点是让模型稳定地产出 Markdown、JSON 或固定字段，而不是每次都随意发挥。</p>
+                <ul>
+                  <li>练习用明确字段定义约束输出</li>
+                  <li>做失败时的解析兜底</li>
+                  <li>理解为什么 prompt 要像接口协议，而不是聊天随口一说</li>
+                </ul>
+                <div class="deliverable">本周产出：一个稳定输出 JSON 的 demo，并对比不同 prompt 的效果。</div>
+              </div>
+            </article>
+            <article class="week">
+              <div class="week-index">第 7 周</div>
+              <div class="week-body">
+                <h4>Function Calling / Tool Calling</h4>
+                <p>开始从“文本生成”走向“任务执行”。理解工具 schema、参数传递、工具结果回填和模型继续推理的链路。</p>
+                <ul>
+                  <li>至少实现两个工具，比如天气、搜索、数据库查询</li>
+                  <li>让模型根据问题自动决定是否调用工具</li>
+                  <li>记录每一步调用轨迹</li>
+                </ul>
+                <div class="deliverable">本周产出：一个能调用外部工具回答问题的 demo。</div>
+              </div>
+            </article>
+            <article class="week">
+              <div class="week-index">第 8 周</div>
+              <div class="week-body">
+                <h4>Embedding 与检索基础</h4>
+                <p>理解 Embedding、向量检索、召回、重排这些 RAG 的基础概念，为下个月做知识库项目铺路。</p>
+                <ul>
+                  <li>试着把几篇文档转成向量</li>
+                  <li>实现最小召回逻辑</li>
+                  <li>看召回结果是否真的相关</li>
+                </ul>
+                <div class="deliverable">本周产出：一个最小知识库问答原型，哪怕只有几个文档也要跑通完整流程。</div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="month">
+          <div class="month-head">
+            <div>
+              <h3>第 3 个月 · RAG 项目</h3>
+              <p>开始做第一个真正像样的项目：企业知识库问答系统。这是最适合写进 AI 应用工程师简历的项目之一。</p>
+            </div>
+            <span class="badge">目标：做出知识库问答系统 V1</span>
+          </div>
+          <div class="weeks">
+            <article class="week">
+              <div class="week-index">第 9 周</div>
+              <div class="week-body">
+                <h4>文档导入与解析</h4>
+                <p>先做文档入口。支持 PDF、Markdown 或网页三选一都可以，重点是把文档文本抽出来。</p>
+                <ul>
+                  <li>定义文档上传和存储结构</li>
+                  <li>做最基础的文本解析</li>
+                  <li>保留文档来源和段落位置信息</li>
+                </ul>
+                <div class="deliverable">本周产出：支持导入至少一种文档格式，并成功提取文本。</div>
+              </div>
+            </article>
+            <article class="week">
+              <div class="week-index">第 10 周</div>
+              <div class="week-body">
+                <h4>切块和索引</h4>
+                <p>重点理解 chunk 策略。块太大，召回不准；块太小，上下文断裂。这里是很多 RAG 系统效果不稳的根源。</p>
+                <ul>
+                  <li>尝试固定长度和带重叠切块</li>
+                  <li>给每个 chunk 保存来源元数据</li>
+                  <li>建立索引并持久化</li>
+                </ul>
+                <div class="deliverable">本周产出：文档切块和向量索引建立流程。</div>
+              </div>
+            </article>
+            <article class="week">
+              <div class="week-index">第 11 周</div>
+              <div class="week-body">
+                <h4>检索、重排和引用来源</h4>
+                <p>开始关注“答得对不对”前面的那半条链路。模型回答前，召回内容是否真的相关更重要。</p>
+                <ul>
+                  <li>实现 Top-K 召回</li>
+                  <li>尝试简单重排或人工排序规则</li>
+                  <li>返回引用片段和文档来源</li>
+                </ul>
+                <div class="deliverable">本周产出：输入问题后能看到相关 chunk 和引用来源。</div>
+              </div>
+            </article>
+            <article class="week">
+              <div class="week-index">第 12 周</div>
+              <div class="week-body">
+                <h4>答案生成与兜底策略</h4>
+                <p>把检索结果喂给模型，生成最终回答。重点不是能答，而是知道什么时候该拒答、该提示信息不足。</p>
+                <ul>
+                  <li>拼接上下文并控制长度</li>
+                  <li>提示模型保留引用来源</li>
+                  <li>没有足够证据时输出兜底文案</li>
+                </ul>
+                <div class="deliverable">本周产出：完整的知识库问答系统 V1，能导文档、建索引、问答、给出处。</div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="month">
+          <div class="month-head">
+            <div>
+              <h3>第 4 个月 · Agent 项目</h3>
+              <p>做一个真正能执行任务的 Agent。你现在手上的科技日报自动化项目，就很适合延展成这个方向。</p>
+            </div>
+            <span class="badge">目标：做出带工具调用的 Agent 服务</span>
+          </div>
+          <div class="weeks">
+            <article class="week">
+              <div class="week-index">第 13 周</div>
+              <div class="week-body">
+                <h4>手写一个最小 Agent</h4>
+                <p>先不要急着依赖重框架。自己手写一版最小 Agent，理解思考、选工具、执行、回填结果这条循环。</p>
+                <ul>
+                  <li>做 2 到 3 个工具</li>
+                  <li>实现一个基本的执行循环</li>
+                  <li>记录 Agent 每一步的动作</li>
+                </ul>
+                <div class="deliverable">本周产出：一个最小 Agent 原型，可执行多步工具调用。</div>
+              </div>
+            </article>
+            <article class="week">
+              <div class="week-index">第 14 周</div>
+              <div class="week-body">
+                <h4>失败重试、超时和状态管理</h4>
+                <p>让 Agent 从“会跑”进化到“能控”。真实业务里模型和工具都可能失败，所以状态机和重试机制很关键。</p>
+                <ul>
+                  <li>给任务增加状态字段</li>
+                  <li>支持超时终止和重试</li>
+                  <li>工具报错时有明确错误信息</li>
+                </ul>
+                <div class="deliverable">本周产出：带状态流转和失败重试的 Agent V1。</div>
+              </div>
+            </article>
+            <article class="week">
+              <div class="week-index">第 15 周</div>
+              <div class="week-body">
+                <h4>记忆和多轮上下文</h4>
+                <p>理解短期记忆和长期记忆的边界。不是所有信息都要塞上下文，也不是所有历史都值得记住。</p>
+                <ul>
+                  <li>做会话历史管理</li>
+                  <li>设计关键事实提取和记忆存储</li>
+                  <li>避免历史对当前任务造成污染</li>
+                </ul>
+                <div class="deliverable">本周产出：一个支持多轮任务的 Agent 会话系统。</div>
+              </div>
+            </article>
+            <article class="week">
+              <div class="week-index">第 16 周</div>
+              <div class="week-body">
+                <h4>工作流框架和业务场景接入</h4>
+                <p>这周开始接 LangGraph 或类似工作流框架，同时把 Agent 套进一个具体业务场景，比如信息汇总、报告生成或任务编排。</p>
+                <ul>
+                  <li>画出节点和边</li>
+                  <li>把你的日报自动化流程用工作流表达出来</li>
+                  <li>对比手写 Agent 和工作流框架的优缺点</li>
+                </ul>
+                <div class="deliverable">本周产出：业务型 Agent 项目 V1，有执行轨迹和阶段结果。</div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="month">
+          <div class="month-head">
+            <div>
+              <h3>第 5 个月 · 平台化与稳定性</h3>
+              <p>让项目从“能演示”升级成“像产品”。这是很多 AI 应用工程师和普通 demo 开发者之间的分水岭。</p>
+            </div>
+            <span class="badge">目标：做出多用户可用的雏形</span>
+          </div>
+          <div class="weeks">
+            <article class="week">
+              <div class="week-index">第 17 周</div>
+              <div class="week-body">
+                <h4>用户体系与权限控制</h4>
+                <p>哪怕只是简单版，也要开始有用户、会话、资源隔离和基础权限，不然系统永远停留在单人 demo 阶段。</p>
+                <ul>
+                  <li>设计用户表和项目表</li>
+                  <li>实现简单登录或 token 校验</li>
+                  <li>做草稿、知识库、任务的用户隔离</li>
+                </ul>
+                <div class="deliverable">本周产出：支持多用户基础隔离的系统版本。</div>
+              </div>
+            </article>
+            <article class="week">
+              <div class="week-index">第 18 周</div>
+              <div class="week-body">
+                <h4>任务系统与异步执行</h4>
+                <p>AI 应用很多时候不是同步接口能解决的。需要异步任务、轮询状态、失败重试和任务队列。</p>
+                <ul>
+                  <li>实现任务创建、排队、执行、完成状态</li>
+                  <li>为长任务设计状态查询接口</li>
+                  <li>让日报生成或知识库构建异步化</li>
+                </ul>
+                <div class="deliverable">本周产出：可异步执行的任务系统。</div>
+              </div>
+            </article>
+            <article class="week">
+              <div class="week-index">第 19 周</div>
+              <div class="week-body">
+                <h4>日志、监控和成本统计</h4>
+                <p>开始补真正的工程化能力。你要能回答“这次失败在哪”“哪个模块慢”“模型花了多少钱”。</p>
+                <ul>
+                  <li>记录模型调用日志</li>
+                  <li>记录耗时、错误、重试次数</li>
+                  <li>做简单成本统计报表</li>
+                </ul>
+                <div class="deliverable">本周产出：一个能查看调用记录和基础指标的后台或日志方案。</div>
+              </div>
+            </article>
+            <article class="week">
+              <div class="week-index">第 20 周</div>
+              <div class="week-body">
+                <h4>Prompt 管理和系统可配置化</h4>
+                <p>避免把所有 prompt 写死在代码里。开始有 prompt 版本、模型配置、参数配置和环境隔离的意识。</p>
+                <ul>
+                  <li>把 prompt 模板文件化</li>
+                  <li>做配置中心式管理的简化版</li>
+                  <li>支持不同场景切换模型和参数</li>
+                </ul>
+                <div class="deliverable">本周产出：一个更像 AI 平台雏形的版本，支持配置化调用。</div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="month">
+          <div class="month-head">
+            <div>
+              <h3>第 6 个月 · 评测与求职收尾</h3>
+              <p>最后一个月不是继续堆功能，而是证明系统有效、讲清楚设计，并把项目整理成简历资产。</p>
+            </div>
+            <span class="badge">目标：项目可量化、可讲、可投递</span>
+          </div>
+          <div class="weeks">
+            <article class="week">
+              <div class="week-index">第 21 周</div>
+              <div class="week-body">
+                <h4>RAG 评测体系</h4>
+                <p>为知识库项目建立测试集，比较不同 chunk、不同召回数、不同 prompt 的效果，开始形成优化证据链。</p>
+                <ul>
+                  <li>设计 20 到 50 条测试问题</li>
+                  <li>做准确率和引用正确性对比</li>
+                  <li>记录优化前后结果</li>
+                </ul>
+                <div class="deliverable">本周产出：知识库项目评测表和一版优化结果说明。</div>
+              </div>
+            </article>
+            <article class="week">
+              <div class="week-index">第 22 周</div>
+              <div class="week-body">
+                <h4>Agent 评测体系</h4>
+                <p>关注任务成功率、工具调用正确率、失败案例和恢复能力。这里很适合用人工评测加简单自动打分结合。</p>
+                <ul>
+                  <li>设计标准任务集</li>
+                  <li>统计成功率和失败原因</li>
+                  <li>整理典型 bad case</li>
+                </ul>
+                <div class="deliverable">本周产出：Agent 项目评测结果和失败案例分析。</div>
+              </div>
+            </article>
+            <article class="week">
+              <div class="week-index">第 23 周</div>
+              <div class="week-body">
+                <h4>项目文档、架构图和 Demo</h4>
+                <p>把“我做了什么”变成面试官能快速理解的材料。架构图、技术选型说明和功能演示比再写几个新功能更重要。</p>
+                <ul>
+                  <li>为每个项目写 README</li>
+                  <li>画一张架构图</li>
+                  <li>录一个 3 到 5 分钟 demo</li>
+                </ul>
+                <div class="deliverable">本周产出：每个项目一页讲解文档和一套演示材料。</div>
+              </div>
+            </article>
+            <article class="week">
+              <div class="week-index">第 24 周</div>
+              <div class="week-body">
+                <h4>简历和面试准备</h4>
+                <p>把项目转成简历表述，准备问题：为什么这么设计、踩过什么坑、怎么优化、你和只会调 API 的人差在哪。</p>
+                <ul>
+                  <li>整理 AI 应用工程师简历关键词</li>
+                  <li>写 2 分钟和 10 分钟两个版本的项目介绍</li>
+                  <li>模拟面试问答</li>
+                </ul>
+                <div class="deliverable">本周产出：正式简历、项目讲稿、面试题准备清单。</div>
+              </div>
+            </article>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="section" id="projects">
+      <div class="section-head">
+        <div>
+          <h2>6 个月后你至少该有的项目</h2>
+          <p>岗位面试更关心“你做过什么”，而不是“你看过什么”。下面这 3 个项目最适合对应 AI 应用工程师方向。</p>
+        </div>
+        <span class="badge">项目比零散知识更值钱</span>
+      </div>
+
+      <div class="project-grid">
+        <article class="project-card">
+          <h3>项目 1：企业知识库问答系统</h3>
+          <p>用来证明你会 RAG 全链路：文档解析、切块、召回、重排、生成、引用来源、评测和兜底策略。</p>
+          <ul class="target-list">
+            <li>至少支持一种文档格式导入</li>
+            <li>有引用来源返回</li>
+            <li>有无答案兜底</li>
+          </ul>
+        </article>
+
+        <article class="project-card">
+          <h3>项目 2：带工具调用的 Agent 应用</h3>
+          <p>用来证明你不只是会聊天，而是真的能做任务执行型系统，理解工具调用、状态管理和失败重试。</p>
+          <ul class="target-list">
+            <li>至少接入 2 到 3 个工具</li>
+            <li>有任务轨迹日志</li>
+            <li>有状态和错误处理</li>
+          </ul>
+        </article>
+
+        <article class="project-card">
+          <h3>项目 3：AI 内容生产流水线</h3>
+          <p>这和你现在做的科技日报项目很接近。它很适合作为 AI 应用工程能力的业务化案例，展示定时任务、清洗、Prompt、生成和流程编排。</p>
+          <ul class="target-list">
+            <li>定时抓取和结构化清洗</li>
+            <li>Prompt 渲染和模型生成</li>
+            <li>日志、产物和失败排查链路</li>
+          </ul>
+        </article>
+      </div>
+
+      <div class="footer-note">
+        最务实的策略不是“把所有新框架都学一遍”，而是先用 6 个月做出 3 个能站得住的项目，再反向补你在项目里暴露出来的短板。对 AI 应用工程师岗位来说，可交付、可解释、可维护，比概念堆砌更重要。
+      </div>
+    </section>
+  </main>
+</body>
+</html>

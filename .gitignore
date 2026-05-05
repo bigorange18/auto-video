@@ -3,3 +3,11 @@ output/
 .env.digest
 cron.log
 logs/
+*.mp4
+*.log
+*.json
+*.csv
+*.db
+*.sqlite
+*output*
+*report*
