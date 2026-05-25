@@ -11,3 +11,4 @@ logs/
 *.sqlite
 *output*
 *report*
+*.diag.env
