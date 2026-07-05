@@ -9,6 +9,25 @@ const statusText = ref('')
 const loading = ref(true)
 const messages = ref([])
 const stats = ref({ recent: [], messageCount: 0, unreadCount: 0 })
+const tasks = ref([])
+const taskSummary = ref({
+  total: 0,
+  status: { todo: 0, in_progress: 0, done: 0 },
+  priority: { high: 0, medium: 0, low: 0 },
+  overdue: 0,
+})
+const taskFilters = reactive({ keyword: '', status: 'all' })
+const taskForm = reactive({
+  title: '',
+  project: '',
+  priority: 'medium',
+  status: 'todo',
+  dueDate: '',
+  tags: '',
+  notes: '',
+})
+const taskSaving = ref(false)
+const taskNotice = ref('')
 const contentForm = reactive({
   site: { titlePrefix: '', title: '', subtitlePrefix: '', subtitleName: '', pixelText: '' },
   intro: { headline: '', summary: '' },
@@ -36,6 +55,17 @@ const projectsInput = computed({
   },
 })
 
+const filteredTasks = computed(() => {
+  const keyword = taskFilters.keyword.trim().toLowerCase()
+  return tasks.value.filter((task) => {
+    const inStatus = taskFilters.status === 'all' ? true : task.status === taskFilters.status
+    const inKeyword = keyword
+      ? [task.title, task.project, ...(task.tags || [])].join(' ').toLowerCase().includes(keyword)
+      : true
+    return inStatus && inKeyword
+  })
+})
+
 async function fetchSession() {
   const response = await fetch('/api/admin/session')
   const result = await response.json()
@@ -43,15 +73,19 @@ async function fetchSession() {
 }
 
 async function loadDashboard() {
-  const [contentRes, messagesRes, statsRes] = await Promise.all([
+  const [contentRes, messagesRes, statsRes, tasksRes, taskSummaryRes] = await Promise.all([
     fetch('/api/admin/content'),
     fetch('/api/admin/messages'),
     fetch('/api/admin/stats'),
+    fetch('/api/admin/tasks'),
+    fetch('/api/admin/tasks/summary'),
   ])
-  const [contentJson, messagesJson, statsJson] = await Promise.all([
+  const [contentJson, messagesJson, statsJson, tasksJson, taskSummaryJson] = await Promise.all([
     contentRes.json(),
     messagesRes.json(),
     statsRes.json(),
+    tasksRes.json(),
+    taskSummaryRes.json(),
   ])
   if (contentJson.success) {
     Object.assign(contentForm, contentJson.data)
@@ -61,6 +95,12 @@ async function loadDashboard() {
   }
   if (statsJson.success) {
     stats.value = statsJson.data
+  }
+  if (tasksJson.success) {
+    tasks.value = tasksJson.data
+  }
+  if (taskSummaryJson.success) {
+    taskSummary.value = taskSummaryJson.data
   }
 }
 
@@ -121,6 +161,79 @@ async function removeMessage(id) {
   await loadDashboard()
 }
 
+function toStatusLabel(status) {
+  const map = {
+    todo: '待处理',
+    in_progress: '进行中',
+    done: '已完成',
+  }
+  return map[status] || '待处理'
+}
+
+function toPriorityLabel(priority) {
+  const map = {
+    high: '高',
+    medium: '中',
+    low: '低',
+  }
+  return map[priority] || '中'
+}
+
+async function createTask() {
+  if (!taskForm.title.trim()) {
+    taskNotice.value = '任务标题不能为空'
+    return
+  }
+  taskSaving.value = true
+  taskNotice.value = ''
+  const response = await fetch('/api/admin/tasks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      title: taskForm.title,
+      project: taskForm.project,
+      priority: taskForm.priority,
+      status: taskForm.status,
+      dueDate: taskForm.dueDate,
+      tags: taskForm.tags
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
+      notes: taskForm.notes,
+    }),
+  })
+  const result = await response.json()
+  taskSaving.value = false
+  taskNotice.value = result.message || (result.success ? '任务已创建' : '创建失败')
+  if (result.success) {
+    taskForm.title = ''
+    taskForm.project = ''
+    taskForm.priority = 'medium'
+    taskForm.status = 'todo'
+    taskForm.dueDate = ''
+    taskForm.tags = ''
+    taskForm.notes = ''
+    await loadDashboard()
+  }
+}
+
+async function cycleTaskStatus(task) {
+  const order = ['todo', 'in_progress', 'done']
+  const currentIndex = order.indexOf(task.status)
+  const nextStatus = order[(currentIndex + 1) % order.length]
+  await fetch(`/api/admin/tasks/${task.id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: nextStatus }),
+  })
+  await loadDashboard()
+}
+
+async function removeTask(id) {
+  await fetch(`/api/admin/tasks/${id}`, { method: 'DELETE' })
+  await loadDashboard()
+}
+
 onMounted(bootstrap)
 </script>
 
@@ -170,6 +283,107 @@ onMounted(bootstrap)
           <span>最近统计天数</span>
           <strong>{{ stats.recent.length }}</strong>
         </article>
+        <article>
+          <span>任务总数</span>
+          <strong>{{ taskSummary.total }}</strong>
+        </article>
+        <article>
+          <span>进行中任务</span>
+          <strong>{{ taskSummary.status.in_progress }}</strong>
+        </article>
+        <article>
+          <span>逾期任务</span>
+          <strong>{{ taskSummary.overdue }}</strong>
+        </article>
+      </section>
+
+      <section class="panel tasks-panel">
+        <div class="section-head">
+          <p class="kicker">Tasko</p>
+          <h2>任务管理</h2>
+        </div>
+
+        <div class="task-toolbar">
+          <label>
+            <span>搜索</span>
+            <input v-model="taskFilters.keyword" type="text" placeholder="按任务、项目或标签搜索" />
+          </label>
+          <label>
+            <span>状态</span>
+            <select v-model="taskFilters.status">
+              <option value="all">全部</option>
+              <option value="todo">待处理</option>
+              <option value="in_progress">进行中</option>
+              <option value="done">已完成</option>
+            </select>
+          </label>
+        </div>
+
+        <form class="task-form" @submit.prevent="createTask">
+          <label>
+            <span>任务标题</span>
+            <input v-model="taskForm.title" type="text" required />
+          </label>
+          <label>
+            <span>项目</span>
+            <input v-model="taskForm.project" type="text" />
+          </label>
+          <label>
+            <span>优先级</span>
+            <select v-model="taskForm.priority">
+              <option value="high">高</option>
+              <option value="medium">中</option>
+              <option value="low">低</option>
+            </select>
+          </label>
+          <label>
+            <span>状态</span>
+            <select v-model="taskForm.status">
+              <option value="todo">待处理</option>
+              <option value="in_progress">进行中</option>
+              <option value="done">已完成</option>
+            </select>
+          </label>
+          <label>
+            <span>截止日期</span>
+            <input v-model="taskForm.dueDate" type="date" />
+          </label>
+          <label>
+            <span>标签（逗号分隔）</span>
+            <input v-model="taskForm.tags" type="text" placeholder="frontend, api" />
+          </label>
+          <label class="full">
+            <span>备注</span>
+            <textarea v-model="taskForm.notes" rows="3"></textarea>
+          </label>
+          <div class="task-form-actions full">
+            <button type="submit" :disabled="taskSaving">{{ taskSaving ? '创建中...' : '新建任务' }}</button>
+            <span class="helper-text">{{ taskNotice }}</span>
+          </div>
+        </form>
+
+        <div class="task-list">
+          <article v-for="item in filteredTasks" :key="item.id" class="task-item">
+            <div class="task-item-head">
+              <div>
+                <strong>{{ item.title }}</strong>
+                <span>{{ item.project || '未分配项目' }}</span>
+              </div>
+              <small>{{ item.dueDate || '无截止日期' }}</small>
+            </div>
+            <p v-if="item.notes">{{ item.notes }}</p>
+            <div class="task-meta">
+              <span class="task-badge">状态：{{ toStatusLabel(item.status) }}</span>
+              <span class="task-badge">优先级：{{ toPriorityLabel(item.priority) }}</span>
+              <span v-for="tag in item.tags" :key="`${item.id}-${tag}`" class="task-tag">#{{ tag }}</span>
+            </div>
+            <div class="task-actions">
+              <button type="button" class="ghost-button" @click="cycleTaskStatus(item)">切换状态</button>
+              <button type="button" class="ghost-button danger" @click="removeTask(item.id)">删除</button>
+            </div>
+          </article>
+          <p v-if="!filteredTasks.length" class="helper-text">当前筛选下没有任务。</p>
+        </div>
       </section>
 
       <section class="panel admin-grid">

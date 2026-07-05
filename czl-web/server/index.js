@@ -3,15 +3,20 @@ import bcrypt from 'bcryptjs'
 import express from 'express'
 import session from 'express-session'
 import {
+  addTask,
   addMessage,
+  deleteTask,
   deleteMessage,
   getAdmin,
   getContent,
   getMessages,
   getStats,
+  getTasks,
+  getTaskSummary,
   markMessageRead,
   saveContent,
   trackVisit,
+  updateTask,
 } from './store.js'
 
 function readBoolean(value, fallback = false) {
@@ -158,6 +163,38 @@ app.get('/api/admin/stats', requireAuth, async (_req, res) => {
       unreadCount: messages.filter((item) => !item.read).length,
     },
   })
+})
+
+app.get('/api/admin/tasks', requireAuth, async (_req, res) => {
+  const tasks = await getTasks()
+  res.json({ success: true, data: tasks })
+})
+
+app.get('/api/admin/tasks/summary', requireAuth, async (_req, res) => {
+  const summary = await getTaskSummary()
+  res.json({ success: true, data: summary })
+})
+
+app.post('/api/admin/tasks', requireAuth, async (req, res) => {
+  const payload = req.body || {}
+  if (!payload.title || !String(payload.title).trim()) {
+    return res.status(400).json({ success: false, message: '任务标题不能为空' })
+  }
+  const nextTask = await addTask(payload)
+  res.json({ success: true, message: '任务已创建', data: nextTask })
+})
+
+app.patch('/api/admin/tasks/:id', requireAuth, async (req, res) => {
+  const nextTask = await updateTask(req.params.id, req.body || {})
+  if (!nextTask) {
+    return res.status(404).json({ success: false, message: '任务不存在' })
+  }
+  res.json({ success: true, message: '任务已更新', data: nextTask })
+})
+
+app.delete('/api/admin/tasks/:id', requireAuth, async (req, res) => {
+  await deleteTask(req.params.id)
+  res.json({ success: true, message: '任务已删除' })
 })
 
 app.use(express.static(distDir))

@@ -97,3 +97,84 @@ export async function trackVisit(ip, userAgent) {
   await writeJson('stats.json', stats)
   return stats
 }
+
+function normalizeTask(raw = {}) {
+  const status = ['todo', 'in_progress', 'done'].includes(raw.status) ? raw.status : 'todo'
+  const priority = ['low', 'medium', 'high'].includes(raw.priority) ? raw.priority : 'medium'
+  const tags = Array.isArray(raw.tags)
+    ? raw.tags.map((item) => String(item).trim()).filter(Boolean).slice(0, 8)
+    : []
+  return {
+    id: raw.id || makeId('task'),
+    title: String(raw.title || '').trim(),
+    project: String(raw.project || '').trim(),
+    priority,
+    status,
+    dueDate: String(raw.dueDate || '').trim(),
+    tags,
+    notes: String(raw.notes || '').trim(),
+    createdAt: raw.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+export async function getTasks() {
+  const tasks = await readJson('tasks.json', [])
+  return [...tasks].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+}
+
+export async function addTask(payload) {
+  const tasks = await readJson('tasks.json', [])
+  const nextTask = normalizeTask(payload)
+  tasks.push(nextTask)
+  await writeJson('tasks.json', tasks)
+  return nextTask
+}
+
+export async function updateTask(id, payload = {}) {
+  const tasks = await readJson('tasks.json', [])
+  let updated = null
+  const nextTasks = tasks.map((task) => {
+    if (task.id !== id) {
+      return task
+    }
+    updated = normalizeTask({ ...task, ...payload, id: task.id, createdAt: task.createdAt })
+    return updated
+  })
+  await writeJson('tasks.json', nextTasks)
+  return updated
+}
+
+export async function deleteTask(id) {
+  const tasks = await readJson('tasks.json', [])
+  const nextTasks = tasks.filter((task) => task.id !== id)
+  await writeJson('tasks.json', nextTasks)
+}
+
+export async function getTaskSummary() {
+  const tasks = await readJson('tasks.json', [])
+  const status = { todo: 0, in_progress: 0, done: 0 }
+  const priority = { high: 0, medium: 0, low: 0 }
+  let overdue = 0
+
+  const now = new Date()
+  tasks.forEach((task) => {
+    const taskStatus = ['todo', 'in_progress', 'done'].includes(task.status) ? task.status : 'todo'
+    const taskPriority = ['high', 'medium', 'low'].includes(task.priority) ? task.priority : 'medium'
+    status[taskStatus] += 1
+    priority[taskPriority] += 1
+    if (task.dueDate && taskStatus !== 'done') {
+      const due = new Date(task.dueDate)
+      if (!Number.isNaN(due.getTime()) && due < now) {
+        overdue += 1
+      }
+    }
+  })
+
+  return {
+    total: tasks.length,
+    status,
+    priority,
+    overdue,
+  }
+}

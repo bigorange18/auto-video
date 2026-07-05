@@ -1,16 +1,27 @@
 import { createApp } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
-import HomeView from './views/HomeView.vue'
-import AdminView from './views/AdminView.vue'
 import './styles.css'
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', name: 'home', component: HomeView },
-    { path: '/admin', name: 'admin', component: AdminView },
+    { path: '/', name: 'home', component: () => import('./views/HomeView.vue') },
+    { path: '/admin', name: 'admin', component: () => import('./views/AdminView.vue') },
+    { path: '/article/:id', name: 'article', component: () => import('./views/ArticleView.vue') },
   ],
+})
+
+// Scroll to top on route change
+router.afterEach(() => {
+  window.scrollTo({ top: 0, behavior: 'instant' })
+})
+
+// Dynamic page titles
+const SITE_NAME = '大橘'
+router.afterEach((to) => {
+  const titles = { home: SITE_NAME, admin: `管理后台 - ${SITE_NAME}` }
+  document.title = titles[to.name] || `${to.meta.title || '文章'} - ${SITE_NAME}`
 })
 
 createApp(App).use(router).mount('#app')

@@ -1,146 +1,178 @@
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
+import EntryCard from '../components/EntryCard.vue'
 
-const content = reactive({
-  site: {},
-  intro: {},
-  skills: [],
-  projects: [],
-  contact: {},
+const activeType = ref('all')
+const searchText = ref('')
+const keyword = ref('')
+const entries = ref([])
+const stats = ref(null)
+const loading = ref(true)
+const loadError = ref(false)
+const scrolled = ref(false)
+
+let debounceTimer = null
+watch(searchText, (val) => {
+  clearTimeout(debounceTimer)
+  debounceTimer = setTimeout(() => { keyword.value = val.trim().toLowerCase() }, 200)
 })
 
-const messageForm = reactive({ name: '', email: '', body: '' })
-const loading = ref(true)
-const sending = ref(false)
-const notice = ref('')
+function onScroll() { scrolled.value = window.scrollY > 10 }
+onMounted(() => { loadData(); window.addEventListener('scroll', onScroll, { passive: true }) })
+onUnmounted(() => { window.removeEventListener('scroll', onScroll) })
 
-async function loadContent() {
-  loading.value = true
-  const response = await fetch('/api/public/content')
-  const result = await response.json()
-  if (result.success) {
-    Object.assign(content, result.data)
-  }
-  loading.value = false
-}
-
-async function submitMessage() {
-  sending.value = true
-  notice.value = ''
-  const response = await fetch('/api/public/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(messageForm),
+const filtered = computed(() => {
+  return entries.value.filter(e => {
+    const typeOk = activeType.value === 'all' || e.type === activeType.value
+    const kwOk = !keyword.value || [e.title, e.summary, ...(e.tags || [])].join(' ').toLowerCase().includes(keyword.value)
+    return typeOk && kwOk
   })
-  const result = await response.json()
-  sending.value = false
-  notice.value = result.message || (result.success ? '已提交' : '提交失败')
-  if (result.success) {
-    messageForm.name = ''
-    messageForm.email = ''
-    messageForm.body = ''
-  }
-}
+})
 
-onMounted(loadContent)
+const photoEntries = computed(() => entries.value.filter(e => e.type === 'photo').slice(0, 4))
 </script>
 
 <template>
-  <div class="site-shell" v-if="!loading">
-    <header class="hero-panel">
-      <div class="hero-copy">
-        <p class="kicker">{{ content.site.titlePrefix }}</p>
-        <h1>{{ content.site.title }}</h1>
-        <p class="subtitle">
-          {{ content.site.subtitlePrefix }}
-          <strong>{{ content.site.subtitleName }}</strong>
-        </p>
-        <p class="summary">{{ content.intro.headline }}</p>
-        <p class="description">{{ content.intro.summary }}</p>
-        <div class="hero-actions">
-          <a href="#projects">查看项目</a>
-          <a href="#contact" class="ghost">联系我</a>
-        </div>
+  <div class="shell">
+
+    <!-- Nav -->
+    <nav class="topnav" :class="{ scrolled }">
+      <div class="topnav-brand">{{ stats?.site?.title || '大橘' }}</div>
+      <div class="topnav-links">
+        <a href="#" :class="{ active: activeType === 'all' }" @click.prevent="activeType = 'all'">全部</a>
+        <a href="#" :class="{ active: activeType === 'blog' }" @click.prevent="activeType = 'blog'">博客</a>
+        <a href="#" :class="{ active: activeType === 'life' }" @click.prevent="activeType = 'life'">生活</a>
+        <a href="#" :class="{ active: activeType === 'photo' }" @click.prevent="activeType = 'photo'">摄影</a>
       </div>
-      <div class="hero-card">
-        <span class="pixel-label">{{ content.site.pixelText }}</span>
-        <div class="hero-stat">
-          <strong>Vue + Node</strong>
-          <span>新站采用单一工程，前后端职责清晰。</span>
-        </div>
-        <div class="hero-stat">
-          <strong>工作前台</strong>
-          <span>展示真实内容、沉淀方法，并保留交流入口。</span>
-        </div>
+      <div class="topnav-actions">
+        <router-link to="/admin" class="btn-ghost-sm">管理</router-link>
       </div>
-    </header>
+    </nav>
 
-    <main class="content-stack">
-      <section class="panel section-grid" id="skills">
-        <div class="section-head">
-          <p class="kicker">Skills</p>
-          <h2>当前能力面</h2>
-        </div>
-        <div class="chip-list">
-          <span v-for="skill in content.skills" :key="skill" class="chip">{{ skill }}</span>
-        </div>
-      </section>
-
-      <section class="panel" id="projects">
-        <div class="section-head">
-          <p class="kicker">Projects</p>
-          <h2>正在推进的项目</h2>
-        </div>
-        <div class="project-grid">
-          <article v-for="project in content.projects" :key="project.title" class="project-card">
-            <h3>{{ project.title }}</h3>
-            <p>{{ project.desc }}</p>
-            <a :href="project.link || '#contact'" target="_blank" rel="noreferrer">打开</a>
-          </article>
-        </div>
-      </section>
-
-      <section class="panel contact-panel" id="contact">
-        <div class="contact-copy">
-          <div class="section-head">
-            <p class="kicker">Contact</p>
-            <h2>联系方式</h2>
+    <div class="home-layout">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="sidebar-card">
+          <div class="sidebar-avatar">
+            <div class="avatar-circle">{{ (stats?.site?.title || '大')[0] }}</div>
           </div>
-          <ul class="contact-list">
-            <li>
-              <span>邮箱</span>
-              <strong>{{ content.contact.email }}</strong>
-            </li>
-            <li>
-              <span>微信</span>
-              <strong>{{ content.contact.wechat }}</strong>
-            </li>
-            <li>
-              <span>GitHub</span>
-              <strong>{{ content.contact.github }}</strong>
-            </li>
-          </ul>
+          <h2 class="sidebar-name">{{ stats?.site?.title || '大橘' }}</h2>
+          <p class="sidebar-subtitle">{{ stats?.site?.subtitleName || '文字と生活' }}</p>
+          <div class="sidebar-divider" />
+          <p class="sidebar-intro" v-if="stats?.intro?.summary">{{ stats.intro.summary }}</p>
+          <p class="sidebar-intro" v-else>个人博客与记录空间。</p>
+          <div style="text-align:center;margin-top:8px">
+            <span class="sidebar-loc">📍 中国</span>
+          </div>
         </div>
 
-        <form class="message-form" @submit.prevent="submitMessage">
-          <label>
-            <span>你的名字</span>
-            <input v-model="messageForm.name" type="text" required />
-          </label>
-          <label>
-            <span>邮箱</span>
-            <input v-model="messageForm.email" type="email" required />
-          </label>
-          <label>
-            <span>留言内容</span>
-            <textarea v-model="messageForm.body" rows="5" required></textarea>
-          </label>
-          <button type="submit" :disabled="sending">
-            {{ sending ? '提交中...' : '发送留言' }}
-          </button>
-          <p class="form-notice" v-if="notice">{{ notice }}</p>
-        </form>
-      </section>
-    </main>
+        <div class="sidebar-card stats-card">
+          <div class="stat-row">
+            <div class="stat-icon">📝</div>
+            <div class="stat-info">
+              <strong>{{ stats?.articleCount || 0 }}</strong>
+              <span>文章</span>
+            </div>
+          </div>
+          <div class="stat-row">
+            <div class="stat-icon">👁️</div>
+            <div class="stat-info">
+              <strong>{{ stats?.totalPV || 0 }}</strong>
+              <span>浏览</span>
+            </div>
+          </div>
+          <div class="stat-row">
+            <div class="stat-icon">👤</div>
+            <div class="stat-info">
+              <strong>{{ stats?.totalUV || 0 }}</strong>
+              <span>访客</span>
+            </div>
+          </div>
+          <div class="stat-row">
+            <div class="stat-icon">📅</div>
+            <div class="stat-info">
+              <strong>{{ stats?.runningDays || 0 }}</strong>
+              <span>运行天数</span>
+            </div>
+          </div>
+          <div class="stat-row">
+            <div class="stat-icon">🔥</div>
+            <div class="stat-info">
+              <strong>{{ stats?.todayPV || 0 }}</strong>
+              <span>今日访问</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="sidebar-card" v-if="stats?.site?.pixelText">
+          <p class="sidebar-motto">"{{ stats.site.pixelText }}"</p>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <main class="main-area">
+        <!-- Hero -->
+        <header class="hero">
+          <div class="hero-deco">🌿</div>
+          <h1>{{ stats?.intro?.headline || '文字与生活的记录空间' }}</h1>
+          <p v-if="stats?.intro?.summary">{{ stats.intro.summary }}</p>
+        </header>
+
+        <!-- Search -->
+        <div class="search-bar">
+          <input v-model="searchText" type="search" placeholder="搜索文章..." />
+        </div>
+
+        <!-- Loading skeletons -->
+        <div v-if="loading" class="entry-grid">
+          <div v-for="i in 4" :key="'sk'+i" class="skeleton-card">
+            <div class="skeleton skeleton-cover" />
+            <div class="skeleton-body">
+              <div class="skeleton skeleton-line short" />
+              <div class="skeleton skeleton-line title" />
+              <div class="skeleton skeleton-line" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Error -->
+        <div v-else-if="loadError" class="empty">
+          <p>加载失败，请稍后再试。</p>
+          <button class="btn-ghost-sm" @click="loadData">重试</button>
+        </div>
+
+        <div v-else-if="filtered.length === 0" class="empty">
+          <p v-if="keyword">没有找到与 "{{ keyword }}" 相关的文章。</p>
+          <p v-else>还没有文章，去后台发布第一篇吧。</p>
+        </div>
+
+        <!-- Entry grid -->
+        <div v-else class="entry-grid">
+          <EntryCard v-for="e in filtered" :key="e.id" :entry="e" />
+        </div>
+
+        <!-- Photo section -->
+        <section v-if="photoEntries.length" class="photo-section">
+          <div class="sec-head">
+            <span class="kicker">Photography</span>
+            <h2>摄影精选</h2>
+          </div>
+          <div class="photo-grid">
+            <article v-for="p in photoEntries" :key="p.id" class="photo-card">
+              <div class="photo-cover" :style="{ backgroundImage: `url(${p.coverImage || p.images?.[0]})` }" />
+              <div class="photo-body">
+                <h3>{{ p.title }}</h3>
+                <p>{{ p.summary }}</p>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="page-footer">
+          <p>&copy; {{ stats?.site?.title || '大橘' }}</p>
+        </footer>
+      </main>
+    </div>
   </div>
 </template>

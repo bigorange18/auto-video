@@ -10,6 +10,15 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [vue()],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'markdown-vendor': ['marked', 'highlight.js'],
+          },
+        },
+      },
+    },
     server: {
       host: devHost,
       port: devPort,

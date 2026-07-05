@@ -12,3 +12,5 @@ logs/
 *output*
 *report*
 *.diag.env
+.github/skills/*
+.claude/skills/*
