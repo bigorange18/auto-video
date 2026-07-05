@@ -8,8 +8,11 @@ import {
   deleteTask,
   deleteMessage,
   getAdmin,
+  getArticleById,
+  getArticles,
   getContent,
   getMessages,
+  getPublicStats,
   getStats,
   getTasks,
   getTaskSummary,
@@ -93,6 +96,25 @@ app.post('/api/public/messages', async (req, res) => {
     body: String(body).trim(),
   })
   res.json({ success: true, message: '留言已提交' })
+})
+
+app.get('/api/public/articles', async (_req, res) => {
+  const articles = await getArticles()
+  const data = articles.map(({ content, ...rest }) => rest)
+  res.json({ success: true, data })
+})
+
+app.get('/api/public/articles/:id', async (req, res) => {
+  const article = await getArticleById(req.params.id)
+  if (!article) {
+    return res.status(404).json({ success: false, message: '文章不存在' })
+  }
+  res.json({ success: true, data: article })
+})
+
+app.get('/api/public/stats', async (_req, res) => {
+  const stats = await getPublicStats()
+  res.json({ success: true, data: stats })
 })
 
 app.post('/api/admin/login', async (req, res) => {

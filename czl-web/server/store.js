@@ -151,6 +151,51 @@ export async function deleteTask(id) {
   await writeJson('tasks.json', nextTasks)
 }
 
+export async function getArticles() {
+  const articles = await readJson('articles.json', [])
+  return articles
+    .filter((a) => a.published !== false)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+}
+
+export async function getArticleById(id) {
+  const articles = await readJson('articles.json', [])
+  return articles.find((a) => a.id === id && a.published !== false) || null
+}
+
+export async function getPublicStats() {
+  const stats = await readJson('stats.json', {})
+  const articles = await readJson('articles.json', [])
+  const content = await readJson('content.json', {})
+
+  let totalPV = 0
+  const allUVs = new Set()
+  const dates = Object.keys(stats).sort()
+
+  Object.values(stats).forEach((day) => {
+    totalPV += day.pv || 0
+    if (Array.isArray(day.uv)) day.uv.forEach((u) => allUVs.add(u))
+  })
+
+  const today = getToday()
+  const todayData = stats[today] || { pv: 0 }
+
+  let runningDays = 0
+  if (dates.length > 0) {
+    runningDays = Math.max(1, Math.floor((Date.now() - new Date(dates[0]).getTime()) / 86400000) + 1)
+  }
+
+  return {
+    articleCount: articles.filter((a) => a.published !== false).length,
+    totalPV,
+    totalUV: allUVs.size,
+    runningDays,
+    todayPV: todayData.pv || 0,
+    site: content.site || {},
+    intro: content.intro || {},
+  }
+}
+
 export async function getTaskSummary() {
   const tasks = await readJson('tasks.json', [])
   const status = { todo: 0, in_progress: 0, done: 0 }

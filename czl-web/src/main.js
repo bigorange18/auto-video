@@ -12,13 +12,11 @@ const router = createRouter({
   ],
 })
 
-// Scroll to top on route change
 router.afterEach(() => {
   window.scrollTo({ top: 0, behavior: 'instant' })
 })
 
-// Dynamic page titles
-const SITE_NAME = '大橘'
+const SITE_NAME = '小狐务器'
 router.afterEach((to) => {
   const titles = { home: SITE_NAME, admin: `管理后台 - ${SITE_NAME}` }
   document.title = titles[to.name] || `${to.meta.title || '文章'} - ${SITE_NAME}`
