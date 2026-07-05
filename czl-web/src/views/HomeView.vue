@@ -1,187 +1,122 @@
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, computed, watch } from 'vue'
 import EntryCard from '../components/EntryCard.vue'
 
-const content = reactive({
-  site: {},
-  intro: {},
-  skills: [],
-  projects: [],
-  contact: {},
+const activeType = ref('all')
+const searchText = ref('')
+const keyword = ref('')
+let timer = null
+
+function setType(t) { activeType.value = t }
+watch(searchText, (v) => {
+  clearTimeout(timer)
+  timer = setTimeout(() => { keyword.value = v.trim().toLowerCase() }, 200)
 })
 
-const messageForm = reactive({ name: '', email: '', body: '' })
-const loading = ref(true)
-const sending = ref(false)
-const notice = ref('')
-
-/* ---- blog ---- */
+/* ---- data ---- */
+const content = reactive({ site: {}, intro: {}, skills: [], projects: [], contact: {} })
 const articles = ref([])
-const articlesLoading = ref(true)
+const loading = ref(true)
+const stats = ref({ articleCount: 0, totalPV: 0, totalUV: 0, runningDays: 0, todayPV: 0 })
 
-async function loadContent() {
-  loading.value = true
-  const response = await fetch('/api/public/content')
-  const result = await response.json()
-  if (result.success) {
-    Object.assign(content, result.data)
-  }
-  loading.value = false
-}
-
-async function loadArticles() {
-  articlesLoading.value = true
-  try {
-    const res = await fetch('/api/public/articles')
-    const data = await res.json()
-    if (data.success) {
-      articles.value = data.data.map((a) => ({
-        ...a,
-        date: a.createdAt ? a.createdAt.slice(0, 10) : '',
-      }))
-    }
-  } catch { /* silent */ }
-  articlesLoading.value = false
-}
-
-async function submitMessage() {
-  sending.value = true
-  notice.value = ''
-  const response = await fetch('/api/public/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(messageForm),
+const filtered = computed(() => {
+  return articles.value.filter(a => {
+    if (activeType.value !== 'all' && a.type !== activeType.value) return false
+    if (keyword.value && ![a.title, a.summary, ...(a.tags || [])].join(' ').toLowerCase().includes(keyword.value)) return false
+    return true
   })
-  const result = await response.json()
-  sending.value = false
-  notice.value = result.message || (result.success ? '已提交' : '提交失败')
-  if (result.success) {
-    messageForm.name = ''
-    messageForm.email = ''
-    messageForm.body = ''
-  }
-}
+})
 
-onMounted(() => {
-  loadContent()
-  loadArticles()
+onMounted(async () => {
+  loading.value = true
+  try {
+    const [contentRes, articlesRes, statsRes] = await Promise.all([
+      fetch('/api/public/content'),
+      fetch('/api/public/articles'),
+      fetch('/api/public/stats'),
+    ])
+    const [c, a, s] = await Promise.all([contentRes.json(), articlesRes.json(), statsRes.json()])
+    if (c.success) Object.assign(content, c.data)
+    if (a.success) articles.value = a.data.map(x => ({ ...x, date: x.createdAt?.slice(0, 10) || '' }))
+    if (s.success) stats.value = s.data
+  } catch { /* */ }
+  loading.value = false
 })
 </script>
 
 <template>
-  <div class="site-shell" v-if="!loading">
-    <!-- ===== Hero ===== -->
-    <header class="hero-panel">
-      <div class="hero-copy">
-        <p class="kicker">{{ content.site.titlePrefix }}</p>
-        <h1>{{ content.site.title }}</h1>
-        <p class="subtitle">
-          {{ content.site.subtitlePrefix }}
-          <strong>{{ content.site.subtitleName }}</strong>
-        </p>
-        <p class="summary">{{ content.intro.headline }}</p>
-        <p class="description">{{ content.intro.summary }}</p>
-        <div class="hero-actions">
-          <a href="#blog">博客</a>
-          <a href="#projects">查看项目</a>
-          <a href="#contact" class="ghost">联系我</a>
-        </div>
+  <div class="home-layout" v-if="!loading">
+    <!-- sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <div class="avatar-circle">🍊</div>
+        <div class="sidebar-name">{{ content.site.title || '大橘' }}</div>
+        <div class="sidebar-subtitle">{{ content.site.subtitleName || '文字と生活' }}</div>
+        <div class="sidebar-divider" />
+        <p class="sidebar-intro" v-if="content.intro.summary">{{ content.intro.summary }}</p>
+        <p class="sidebar-intro" v-else>个人博客与记录空间。分享技术笔记、项目心得与生活随想。</p>
       </div>
-      <div class="hero-card">
-        <span class="pixel-label">{{ content.site.pixelText }}</span>
-        <div class="hero-stat">
-          <strong>Vue + Node</strong>
-          <span>新站采用单一工程，前后端职责清晰。</span>
-        </div>
-        <div class="hero-stat">
-          <strong>工作前台</strong>
-          <span>展示真实内容、沉淀方法，并保留交流入口。</span>
-        </div>
+
+      <div class="sidebar-card stats-card">
+        <div class="stat-row"><span class="stat-icon">📝</span><strong>{{ stats.articleCount }}</strong><span>文章</span></div>
+        <div class="stat-row"><span class="stat-icon">👁️</span><strong>{{ stats.totalPV }}</strong><span>浏览</span></div>
+        <div class="stat-row"><span class="stat-icon">👤</span><strong>{{ stats.totalUV }}</strong><span>访客</span></div>
+        <div class="stat-row"><span class="stat-icon">📅</span><strong>{{ stats.runningDays }}</strong><span>天运行</span></div>
+        <div class="stat-row"><span class="stat-icon">🔥</span><strong>{{ stats.todayPV }}</strong><span>今日</span></div>
       </div>
-    </header>
 
-    <main class="content-stack">
-      <!-- ===== Blog ===== -->
-      <section class="panel" id="blog">
-        <div class="section-head">
-          <p class="kicker">Blog</p>
-          <h2>最新文章</h2>
-        </div>
-        <div v-if="articlesLoading" class="helper-text">加载中…</div>
-        <div v-else-if="articles.length === 0" class="helper-text">还没有文章。</div>
-        <div v-else class="blog-grid">
-          <EntryCard v-for="a in articles" :key="a.id" :entry="a" />
-        </div>
-      </section>
-
-      <!-- ===== Skills ===== -->
-      <section class="panel section-grid" id="skills">
-        <div class="section-head">
-          <p class="kicker">Skills</p>
-          <h2>当前能力面</h2>
-        </div>
+      <div class="sidebar-card">
+        <div class="section-head"><p class="kicker">Skills</p><h3>能力面</h3></div>
         <div class="chip-list">
-          <span v-for="skill in content.skills" :key="skill" class="chip">{{ skill }}</span>
+          <span v-for="s in content.skills" :key="s" class="chip">{{ s }}</span>
         </div>
-      </section>
+      </div>
+    </aside>
 
-      <!-- ===== Projects ===== -->
-      <section class="panel" id="projects">
-        <div class="section-head">
-          <p class="kicker">Projects</p>
-          <h2>正在推进的项目</h2>
+    <!-- main -->
+    <main class="main-area">
+      <!-- type filter + search -->
+      <div class="filter-bar">
+        <div class="type-filters">
+          <button :class="{ active: activeType === 'all' }" @click="setType('all')">全部</button>
+          <button :class="{ active: activeType === 'blog' }" @click="setType('blog')">博客</button>
+          <button :class="{ active: activeType === 'life' }" @click="setType('life')">生活</button>
+          <button :class="{ active: activeType === 'photo' }" @click="setType('photo')">摄影</button>
         </div>
-        <div class="project-grid">
-          <article v-for="project in content.projects" :key="project.title" class="project-card">
-            <h3>{{ project.title }}</h3>
-            <p>{{ project.desc }}</p>
-            <a :href="project.link || '#contact'" target="_blank" rel="noreferrer">打开</a>
-          </article>
-        </div>
-      </section>
+        <input v-model="searchText" type="search" placeholder="搜索文章..." class="search-input" />
+      </div>
 
-      <!-- ===== Contact ===== -->
-      <section class="panel contact-panel" id="contact">
-        <div class="contact-copy">
-          <div class="section-head">
-            <p class="kicker">Contact</p>
-            <h2>联系方式</h2>
+      <!-- blog list -->
+      <div v-if="filtered.length" class="blog-list">
+        <EntryCard v-for="a in filtered" :key="a.id" :entry="a" />
+      </div>
+      <div v-else class="empty-state">
+        <p v-if="keyword">没找到与"{{ keyword }}"相关的文章</p>
+        <p v-else>还没有文章。</p>
+      </div>
+    </main>
+  </div>
+
+  <!-- loading -->
+  <div class="home-layout" v-else>
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <div class="skeleton" style="width:64px;height:64px;border-radius:50%;margin:0 auto 12px" />
+        <div class="skeleton" style="width:80px;height:18px;margin:0 auto 6px" />
+        <div class="skeleton" style="width:120px;height:13px;margin:0 auto" />
+      </div>
+    </aside>
+    <main class="main-area">
+      <div class="blog-list">
+        <div v-for="i in 3" :key="i" class="skeleton-card">
+          <div class="skeleton" style="width:200px;height:130px;border-radius:12px;flex-shrink:0" />
+          <div style="display:grid;gap:8px;padding:16px 0">
+            <div class="skeleton" style="width:60px;height:12px" />
+            <div class="skeleton" style="width:70%;height:20px" />
+            <div class="skeleton" style="width:100%;height:13px" />
           </div>
-          <ul class="contact-list">
-            <li>
-              <span>邮箱</span>
-              <strong>{{ content.contact.email }}</strong>
-            </li>
-            <li>
-              <span>微信</span>
-              <strong>{{ content.contact.wechat }}</strong>
-            </li>
-            <li>
-              <span>GitHub</span>
-              <strong>{{ content.contact.github }}</strong>
-            </li>
-          </ul>
         </div>
-
-        <form class="message-form" @submit.prevent="submitMessage">
-          <label>
-            <span>你的名字</span>
-            <input v-model="messageForm.name" type="text" required />
-          </label>
-          <label>
-            <span>邮箱</span>
-            <input v-model="messageForm.email" type="email" required />
-          </label>
-          <label>
-            <span>留言内容</span>
-            <textarea v-model="messageForm.body" rows="5" required></textarea>
-          </label>
-          <button type="submit" :disabled="sending">
-            {{ sending ? '提交中...' : '发送留言' }}
-          </button>
-          <p class="form-notice" v-if="notice">{{ notice }}</p>
-        </form>
-      </section>
+      </div>
     </main>
   </div>
 </template>

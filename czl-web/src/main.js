@@ -16,10 +16,9 @@ router.afterEach(() => {
   window.scrollTo({ top: 0, behavior: 'instant' })
 })
 
-const SITE_NAME = '小狐务器'
+const SITE = '大橘'
 router.afterEach((to) => {
-  const titles = { home: SITE_NAME, admin: `管理后台 - ${SITE_NAME}` }
-  document.title = titles[to.name] || `${to.meta.title || '文章'} - ${SITE_NAME}`
+  document.title = to.name === 'home' ? SITE : to.name === 'admin' ? `管理后台 - ${SITE}` : (to.meta.title || '文章') + ` - ${SITE}`
 })
 
 createApp(App).use(router).mount('#app')

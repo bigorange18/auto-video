@@ -7,75 +7,57 @@ const route = useRoute()
 const article = ref(null)
 const loading = ref(true)
 const error = ref('')
-
-const tLabel = { blog: '博客', life: '生活', photo: '摄影' }
-
+const labels = { blog: '博客', life: '生活', photo: '摄影' }
 const html = computed(() => article.value ? renderMarkdown(article.value.content) : '')
 
-async function loadArticle() {
-  loading.value = true
-  error.value = ''
+onMounted(async () => {
   try {
     const res = await fetch(`/api/public/articles/${route.params.id}`)
-    const data = await res.json()
-    if (!data.success) error.value = data.message || '文章不存在或已被删除'
-    else {
-      article.value = data.data
-      document.title = `${data.data.title} — 大橘`
-    }
-  } catch {
-    error.value = '加载失败，请稍后再试。'
-  } finally { loading.value = false }
-}
-
-onMounted(loadArticle)
+    const d = await res.json()
+    if (!d.success) error.value = d.message || '文章不存在'
+    else { article.value = d.data; document.title = `${d.data.title} — 大橘` }
+  } catch { error.value = '加载失败' }
+  finally { loading.value = false }
+})
 </script>
 
 <template>
   <div class="article-shell">
-    <nav class="article-nav">
-      <router-link to="/" class="btn-ghost-sm">&larr; 返回首页</router-link>
-    </nav>
+    <nav class="article-back"><router-link to="/">&larr; 返回首页</router-link></nav>
 
-    <!-- Loading skeleton -->
-    <div v-if="loading" class="panel article-detail">
-      <div class="skeleton" style="width:60px;height:12px;margin-bottom:24px" />
-      <div class="skeleton" style="width:70%;height:36px;margin-bottom:16px" />
-      <div class="skeleton" style="width:45%;height:22px;margin-bottom:36px" />
-      <div class="skeleton" style="width:100%;aspect-ratio:2/1;margin-bottom:36px" />
-      <div v-for="i in 8" :key="'sl'+i" class="skeleton" style="width:100%;height:14px;margin-bottom:12px" />
-      <div class="skeleton" style="width:55%;height:14px" />
+    <div v-if="loading" class="article-panel">
+      <div class="skeleton" style="width:60px;height:12px;margin-bottom:20px" />
+      <div class="skeleton" style="width:70%;height:32px;margin-bottom:14px" />
+      <div class="skeleton" style="width:45%;height:18px;margin-bottom:32px" />
+      <div class="skeleton" style="width:100%;aspect-ratio:2/1;margin-bottom:32px;border-radius:16px" />
+      <div v-for="i in 8" :key="i" class="skeleton" style="width:100%;height:13px;margin-bottom:10px" />
     </div>
 
-    <div v-else-if="error" class="panel empty">
+    <div v-else-if="error" class="article-panel empty">
       <p>{{ error }}</p>
       <div style="display:flex;gap:10px;justify-content:center;margin-top:16px">
-        <button class="btn-ghost-sm" @click="loadArticle">重试</button>
-        <router-link to="/" class="btn-ghost-sm">返回首页</router-link>
+        <router-link to="/">&larr; 返回首页</router-link>
       </div>
     </div>
 
-    <article v-else class="panel article-detail">
+    <article v-else class="article-panel">
       <header class="article-header">
         <div class="article-meta">
-          <span class="article-type-badge">{{ tLabel[article.type] || '博客' }}</span>
-          <time>{{ article.createdAt.slice(0, 10) }}</time>
+          <span class="article-badge">{{ labels[article.type] || '博客' }}</span>
+          <time>{{ article.createdAt?.slice(0, 10) }}</time>
         </div>
         <h1>{{ article.title }}</h1>
-        <p v-if="article.summary" class="article-summary">{{ article.summary }}</p>
-        <div v-if="article.tags.length" class="article-tags">
-          <span v-for="t in article.tags" :key="t" class="tag">{{ t }}</span>
+        <p v-if="article.summary" class="article-subtitle">{{ article.summary }}</p>
+        <div v-if="article.tags?.length" class="article-tags">
+          <span v-for="t in article.tags" :key="t" class="article-tag">{{ t }}</span>
         </div>
       </header>
-
       <div v-if="article.coverImage" class="article-cover">
         <img :src="article.coverImage" :alt="article.title" loading="lazy" decoding="async" />
       </div>
-
       <div class="article-body" v-html="html" />
-
       <footer class="article-footer">
-        <p>发布于 {{ article.createdAt.slice(0, 10) }}</p>
+        <p>发布于 {{ article.createdAt?.slice(0, 10) }}</p>
       </footer>
     </article>
   </div>
