@@ -6,6 +6,17 @@ logs/
 *.mp4
 *.log
 *.json
+# 以下 JSON 文件必须提交
+!package.json
+!package-lock.json
+!czl-web/package.json
+!czl-web/package-lock.json
+!czl-web/data/admin.json
+!czl-web/data/articles.json
+!czl-web/data/content.json
+!czl-web/data/messages.json
+!czl-web/data/stats.json
+!czl-web/data/tasks.json
 *.csv
 *.db
 *.sqlite

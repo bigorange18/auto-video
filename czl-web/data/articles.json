@@ -1,0 +1,50 @@
+[
+  {
+    "id": "article_001",
+    "title": "欢迎来到我的博客",
+    "summary": "这是博客系统的第一篇示例文章，介绍本博客的主要内容和写作方向。",
+    "content": "# 欢迎来到我的博客\n\n这是博客系统的 **第一篇** 文章。\n\n## 关于本博客\n\n这里会记录：\n- 技术学习笔记\n- 项目开发心得\n- 生活随想与摄影\n\n## 代码示例\n\n```javascript\nfunction greet(name) {\n  return `你好，${name}！欢迎来到我的博客。`\n}\n\nconsole.log(greet('朋友'))\n```\n\n```python\ndef fibonacci(n):\n    a, b = 0, 1\n    for _ in range(n):\n        yield a\n        a, b = b, a + b\n\nprint(list(fibonacci(10)))\n```\n\n## 引用\n\n> 写作是最好的思考方式。把想法写下来，才能真正理清思路。\n>\n> — 某个热爱写作的开发者\n\n## 表格示例\n\n| 分类 | 内容 | 更新频率 |\n|------|------|----------|\n| 技术 | 前端/Vue/Node | 每周 |\n| 生活 | 随笔/感悟 | 不定期 |\n| 摄影 | 城市街拍 | 每月 |\n\n---\n\n期待在这个空间里记录更多有趣的内容。",
+    "tags": [
+      "博客",
+      "入门",
+      "写作"
+    ],
+    "type": "blog",
+    "coverImage": "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=1200&q=80",
+    "published": true,
+    "createdAt": "2026-07-05T00:00:00.000Z",
+    "updatedAt": "2026-07-05T00:00:00.000Z"
+  },
+  {
+    "id": "article_002",
+    "title": "Vue 3 Composition API 实践笔记",
+    "summary": "记录从 Options API 迁移到 Composition API 的实际经验和最佳实践。",
+    "content": "# Vue 3 Composition API 实践笔记\n\nVue 3 的 Composition API 带来了全新的代码组织方式。本文记录我在实际项目中的使用心得。\n\n## 为什么选择 Composition API\n\n1. **更好的逻辑复用** — 通过 composables 替代 mixins\n2. **更清晰的代码组织** — 相关逻辑可以放在一起\n3. **更好的 TypeScript 支持**\n\n## 基础示例\n\n```vue\n<script setup>\nimport { ref, computed, onMounted } from 'vue'\n\nconst count = ref(0)\nconst double = computed(() => count.value * 2)\n\nfunction increment() {\n  count.value++\n}\n\nonMounted(() => {\n  console.log('组件已挂载')\n})\n</script>\n```\n\n## 封装 Composable\n\n```javascript\n// useCounter.js\nimport { ref, computed } from 'vue'\n\nexport function useCounter(initial = 0) {\n  const count = ref(initial)\n  const double = computed(() => count.value * 2)\n  \n  function increment() {\n    count.value++\n  }\n  \n  function decrement() {\n    count.value--\n  }\n  \n  return { count, double, increment, decrement }\n}\n```\n\n## 使用 Composable\n\n```vue\n<script setup>\nimport { useCounter } from './useCounter'\n\nconst { count, double, increment, decrement } = useCounter(10)\n</script>\n```\n\n## 小结\n\nComposition API 让 Vue 应用的代码组织更加灵活，特别是对于中大型项目来说优势明显。推荐在新项目中优先使用 `<script setup>` 语法。",
+    "tags": [
+      "Vue",
+      "前端",
+      "JavaScript"
+    ],
+    "type": "blog",
+    "coverImage": "https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=1200&q=80",
+    "published": true,
+    "createdAt": "2026-07-03T12:00:00.000Z",
+    "updatedAt": "2026-07-03T12:00:00.000Z"
+  },
+  {
+    "id": "article_003",
+    "title": "城市夜景拍摄技巧分享",
+    "summary": "分享一些在城市夜晚拍摄中总结的实用技巧和相机参数设置。",
+    "content": "# 城市夜景拍摄技巧分享\n\n夜晚的城市有着完全不同的魅力。灯光的交织、车流的光轨、建筑的轮廓，都是绝佳的拍摄题材。\n\n## 设备准备\n\n- **三脚架** — 夜景长曝光必备\n- **快门线/遥控器** — 避免按快门时的抖动\n- **广角镜头** — 适合建筑和城市全景\n\n## 参数设置建议\n\n| 场景 | 光圈 | 快门 | ISO |\n|------|------|------|-----|\n| 城市夜景 | f/8-f/11 | 5-30s | 100-400 |\n| 车流光轨 | f/8-f/16 | 10-30s | 100 |\n| 手持夜景 | f/2.8-f/4 | 1/30-1/60s | 1600-6400 |\n\n## 拍摄时机\n\n> 蓝调时刻（日落后 20-30 分钟）是拍摄夜景的最佳时机。天空还有微弱的蓝光，与城市的暖色灯光形成美妙的对比。\n\n## 构图建议\n\n1. 寻找水面倒影增加层次感\n2. 利用引导线（道路、桥梁）引导视线\n3. 注意天空与地面的比例\n\n## 后期处理\n\n- 适当提高阴影细节\n- 降低高光避免过曝\n- 增强色彩对比（冷暖对比）\n\n拍摄夜景需要耐心和练习，多尝试不同的角度和参数组合，一定能拍出满意的作品。",
+    "tags": [
+      "摄影",
+      "夜景",
+      "技巧"
+    ],
+    "type": "photo",
+    "coverImage": "https://images.unsplash.com/photo-1519501025264-65ba15a82390?auto=format&fit=crop&w=1200&q=80",
+    "published": true,
+    "createdAt": "2026-07-01T08:30:00.000Z",
+    "updatedAt": "2026-07-01T08:30:00.000Z"
+  }
+]

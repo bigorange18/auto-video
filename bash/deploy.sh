@@ -36,7 +36,7 @@ build() {
 
   if [[ ! -d node_modules ]]; then
     printf '安装依赖...\n'
-    npm ci --production=false
+    npm install
   fi
 
   npx vite build

@@ -1,0 +1,26 @@
+{
+  "name": "czl-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "deploy:local": "npm run build && npm run start",
+    "server": "node --env-file-if-exists=.env server/index.js",
+    "dev:server": "NODE_ENV=development node --env-file-if-exists=.env server/index.js",
+    "start": "NODE_ENV=production node --env-file-if-exists=.env server/index.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "express": "^5.2.1",
+    
+    "express-session": "^1.18.1",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.4",
+    "vite": "^5.4.19"
+  }
+}
