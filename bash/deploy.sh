@@ -68,8 +68,10 @@ build() {
   require_cmd node
   require_cmd npm
 
-  if [[ ! -d node_modules ]]; then
-    printf '安装依赖...\n'
+  # 确保依赖正常（处理 node_modules 损坏的情况）
+  if [[ ! -d node_modules ]] || [[ ! -x node_modules/.bin/vite ]]; then
+    printf '清理并重新安装依赖...\n'
+    rm -rf node_modules
     npm install
   fi
 
