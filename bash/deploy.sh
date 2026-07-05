@@ -10,6 +10,8 @@ set -euo pipefail
 #   ./bash/deploy.sh restart   # 重启服务
 #   ./bash/deploy.sh status    # 查看状态
 #   ./bash/deploy.sh logs      # 查看日志
+#   ./bash/deploy.sh setup-nginx # 配置 Nginx/HTTPS（需要 root）
+#   ./bash/deploy.sh full      # 构建 + 重启 + Nginx 配置（尝试 sudo）
 # ============================================================
 
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
@@ -26,6 +28,38 @@ require_cmd() {
   if ! command -v "$1" &>/dev/null; then
     printf 'ERROR: 缺少命令 %s，请先安装。\n' "$1" >&2
     exit 1
+  fi
+}
+
+# 从 .env 文件导出环境变量（兼容没有 node 原生 env-file 支持的情况）
+load_env_file() {
+  if [[ -f "$APP_DIR/.env" ]]; then
+    printf '加载 %s/.env 环境变量\n' "$APP_DIR"
+    # 导出所有变量到环境
+    set -a
+    # shellcheck disable=SC1090
+    . "$APP_DIR/.env"
+    set +a
+  fi
+}
+
+setup_nginx() {
+  local setup_script="$SCRIPT_DIR/setup-nginx.sh"
+  if [[ ! -f "$setup_script" ]]; then
+    printf 'ERROR: nginx 配置脚本不存在: %s\n' "$setup_script" >&2
+    exit 1
+  fi
+
+  if [[ $EUID -ne 0 ]]; then
+    if command -v sudo &>/dev/null; then
+      printf '使用 sudo 运行 nginx 配置脚本...\n'
+      sudo bash "$setup_script"
+    else
+      printf 'ERROR: 当前用户不是 root，且没有 sudo。请使用 root 或 sudo 运行 %s\n' "$setup_script" >&2
+      exit 1
+    fi
+  else
+    bash "$setup_script"
   fi
 }
 
@@ -46,16 +80,15 @@ build() {
 start() {
   printf '\n===== 启动服务 =====\n'
   require_cmd node
-
   if command -v "$PM2_BIN" &>/dev/null; then
+    load_env_file
     if "$PM2_BIN" list 2>/dev/null | grep -q "$PM2_NAME"; then
       printf 'pm2 进程已存在，reload...\n'
       "$PM2_BIN" reload "$PM2_NAME" --update-env
     else
       printf 'pm2 启动 %s...\n' "$PM2_NAME"
       "$PM2_BIN" start server/index.js \
-        --name "$PM2_NAME" \
-        --node-args="--env-file-if-exists=.env"
+        --name "$PM2_NAME"
     fi
     "$PM2_BIN" save
   else
@@ -63,12 +96,14 @@ start() {
     local pid_file="$PROJECT_ROOT/logs/czl-web.pid"
     mkdir -p "$PROJECT_ROOT/logs"
 
+    load_env_file
+
     if [[ -f "$pid_file" ]] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
       printf '服务已在运行中 (pid: %s)\n' "$(cat "$pid_file")"
       return
     fi
 
-    nohup node --env-file-if-exists=.env server/index.js \
+    nohup node server/index.js \
       > "$PROJECT_ROOT/logs/czl-web.log" 2>&1 &
     echo $! > "$pid_file"
     printf '已启动 (pid: %s)\n' "$(cat "$pid_file")"
@@ -128,15 +163,17 @@ logs() {
 
 # ---- main ----
 case "${1:-deploy}" in
-  build)   build ;;
-  start)   start ;;
-  stop)    stop ;;
-  restart) stop; start ;;
-  status)  status ;;
-  logs)    logs ;;
-  deploy)  build; stop; start ;;
+  build)       build ;;
+  start)       start ;;
+  stop)        stop ;;
+  restart)     stop; start ;;
+  status)      status ;;
+  logs)        logs ;;
+  setup-nginx) setup_nginx ;;
+  deploy)      build; stop; start ;;
+  full)        build; stop; start; setup_nginx ;;
   *)
-    printf '用法: %s {deploy|build|start|stop|restart|status|logs}\n' "$0"
+    printf '用法: %s {deploy|build|start|stop|restart|status|logs|setup-nginx|full}\n' "$0"
     exit 1
     ;;
 esac
