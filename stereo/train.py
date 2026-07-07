@@ -20,13 +20,13 @@ import pytorch_lightning as pl
 import torch
 import yaml
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
-from pytorch_lightning.loggers import TensorBoardLogger
 
 # 确保项目根目录在 path 中
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
+from stereo.loggers.factory import build_logger
 from stereo.lit_data import StereoDataModule
 from stereo.lit_module import StereoModule
 
@@ -111,15 +111,7 @@ def main():
     lr_monitor = LearningRateMonitor(logging_interval="epoch")
 
     # === Logger ===
-    logger_cfg = cfg.get("logger", {})
-    logger_name = logger_cfg.get("name", "tensorboard")
-    if logger_name == "tensorboard":
-        logger = TensorBoardLogger(
-            save_dir=logger_cfg.get("save_dir", "./checkpoints/logs"),
-            name="stereo",
-        )
-    else:
-        logger = True  # PyTorch Lightning 默认 logger
+    logger = build_logger(cfg.get("logger", {}))
 
     # === Trainer ===
     trainer_cfg = cfg.get("trainer", {})

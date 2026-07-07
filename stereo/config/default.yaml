@@ -48,3 +48,6 @@ trainer:
 logger:
   name: tensorboard              # tensorboard | wandb
   save_dir: ./checkpoints/logs
+  # project: stereo              # (wandb 时必填)
+  # entity: null                 # (wandb 时可选，团队/用户名)
+  # run_name: null               # (wandb 时可选，run 的名称)
