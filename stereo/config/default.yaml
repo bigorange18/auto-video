@@ -1,0 +1,50 @@
+# ============================================================
+# 双目立体匹配训练配置
+# 修改下方参数后直接运行: python -m stereo.train
+# ============================================================
+
+# --- 数据 ---
+data:
+  name: kitti2015                # 数据集名称（见 data/factory.py）
+  root: /data/kitti2015          # 数据集根目录
+  image_size: [256, 512]         # 训练图像尺寸 (H, W)
+  batch_size: 4
+  num_workers: 4
+
+# --- 模型 ---
+model:
+  name: placeholder              # backbone 名称（见 models/registry.py）
+  max_disp: 192                  # 最大视差
+
+# --- 损失函数 ---
+loss:
+  name: composite
+  items:
+    - {name: smooth_l1, weight: 1.0}
+    # - {name: epe, weight: 0.3}   # 可叠加多个 loss
+
+# --- 优化器 ---
+optimizer:
+  name: adam                     # adam | adamw | sgd
+  lr: 0.001
+  weight_decay: 0.0001
+
+# --- 学习率调度 ---
+scheduler:
+  name: cosine                   # cosine | step | plateau
+  t_max: 100
+
+# --- 训练 ---
+trainer:
+  max_epochs: 100
+  accelerator: auto              # auto | gpu | cpu
+  devices: auto                  # auto | 1 | [0,1]
+  precision: 32                  # 32 | 16-mixed
+  log_every_n_steps: 50
+  check_val_every_n_epoch: 5
+  default_root_dir: ./checkpoints
+
+# --- 日志 ---
+logger:
+  name: tensorboard              # tensorboard | wandb
+  save_dir: ./checkpoints/logs
