@@ -1,5 +1,6 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import ThemeToggle from './ThemeToggle.vue'
 
 const scrolled = ref(false)
 const showContact = ref(false)
@@ -37,6 +38,7 @@ async function submitMessage() {
         <router-link to="/admin">管理</router-link>
         <a href="#" class="contact-trigger" @click.prevent="openContact">联系方式</a>
       </div>
+      <ThemeToggle />
     </div>
   </nav>
 

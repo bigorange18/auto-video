@@ -10,6 +10,31 @@ const error = ref('')
 const labels = { blog: '博客', life: '生活', photo: '摄影' }
 const html = computed(() => article.value ? renderMarkdown(article.value.content) : '')
 
+/* ---- 阅读进度 ---- */
+const progress = ref(0)
+
+/* ---- 阅读时间 ---- */
+const readingTime = computed(() => {
+  if (!article.value?.content) return ''
+  const len = article.value.content.length
+  const mins = Math.max(1, Math.ceil(len / 300))
+  return `约 ${mins} 分钟`
+})
+
+/* ---- 上/下篇 ---- */
+const adjacentArticles = ref({ prev: null, next: null })
+async function fetchAdjacent() {
+  try {
+    const res = await fetch('/api/public/articles')
+    const d = await res.json()
+    if (d.success) {
+      const idx = d.data.findIndex(a => a.id === route.params.id)
+      if (idx > 0) adjacentArticles.value.prev = d.data[idx - 1]
+      if (idx < d.data.length - 1) adjacentArticles.value.next = d.data[idx + 1]
+    }
+  } catch {}
+}
+
 /* ---- TOC ---- */
 const toc = computed(() => {
   if (!article.value) return []
@@ -59,6 +84,46 @@ function renderMath() {
     } catch {}
   })
 }
+
+/* ---- 代码复制 + 语言标签 ---- */
+function enhanceCodeBlocks() {
+  nextTick(() => {
+    const articleBody = document.querySelector('.article-body')
+    if (!articleBody) return
+    articleBody.querySelectorAll('pre').forEach(pre => {
+      if (pre.parentElement?.classList.contains('code-block-wrapper')) return
+      const code = pre.querySelector('code')
+      const lang = code?.className?.match(/language-(\w+)/)?.[1] || ''
+      const wrapper = document.createElement('div')
+      wrapper.className = 'code-block-wrapper'
+      pre.parentNode.insertBefore(wrapper, pre)
+      wrapper.appendChild(pre)
+      if (lang) {
+        const label = document.createElement('span')
+        label.className = 'code-lang-label'
+        label.textContent = lang
+        wrapper.appendChild(label)
+      }
+      const btn = document.createElement('button')
+      btn.className = 'code-copy-btn'
+      btn.textContent = '复制'
+      btn.addEventListener('click', () => {
+        const text = pre.textContent || ''
+        navigator.clipboard.writeText(text).then(() => {
+          btn.textContent = '✓ 已复制'
+          btn.classList.add('copied')
+          setTimeout(() => { btn.textContent = '复制'; btn.classList.remove('copied') }, 2000)
+        })
+      })
+      wrapper.appendChild(btn)
+    })
+  })
+}
+
+function enhanceContent() {
+  renderMath()
+  enhanceCodeBlocks()
+}
 let _timer = null
 watch(html, () => {
   clearInterval(_timer)
@@ -66,7 +131,7 @@ watch(html, () => {
   _timer = setInterval(() => {
     if (window.renderMathInElement || window._katexReady || tries > 20) {
       clearInterval(_timer)
-      renderMath()
+      enhanceContent()
     }
     tries++
   }, 150)
@@ -81,6 +146,11 @@ function onScroll() {
     if (h.getBoundingClientRect().top <= 120) current = h.id
   })
   activeSlug.value = current
+
+  /* 阅读进度 */
+  const scrollTop = window.scrollY
+  const docHeight = document.documentElement.scrollHeight - window.innerHeight
+  progress.value = docHeight > 0 ? Math.min(100, (scrollTop / docHeight) * 100) : 0
 }
 
 let _tocScrollHandler = null
@@ -94,14 +164,19 @@ watch(html, () => {
 
 function scrollToTop() { window.scrollTo({ top: 0, behavior: 'smooth' }) }
 
-onMounted(loadArticle)
+onMounted(() => {
+  loadArticle()
+  fetchAdjacent()
+  window.addEventListener('scroll', onScroll, { passive: true })
+})
 onUnmounted(() => {
   clearInterval(_timer)
-  window.removeEventListener('scroll', _tocScrollHandler)
+  window.removeEventListener('scroll', onScroll)
 })
 </script>
 
 <template>
+  <div class="reading-progress" :style="{ width: progress + '%' }"></div>
   <div class="article-shell">
     <nav class="article-back"><router-link to="/">&larr; 返回首页</router-link></nav>
 
@@ -139,6 +214,7 @@ onUnmounted(() => {
           <div class="article-meta">
             <span class="article-badge">{{ labels[article.type] || '博客' }}</span>
             <time>{{ article.createdAt?.slice(0, 10) }}</time>
+            <span class="article-reading-time">{{ readingTime }}</span>
           </div>
           <h1>{{ article.title }}</h1>
           <p v-if="article.summary" class="article-subtitle">{{ article.summary }}</p>
@@ -150,6 +226,16 @@ onUnmounted(() => {
           <img :src="article.coverImage" :alt="article.title" loading="lazy" decoding="async" />
         </div>
         <div class="article-body" v-html="html" />
+        <nav class="article-nav" v-if="adjacentArticles.prev || adjacentArticles.next">
+          <router-link v-if="adjacentArticles.prev" :to="`/article/${adjacentArticles.prev.id}`">
+            <div class="article-nav-label">← 上一篇</div>
+            <div class="article-nav-title">{{ adjacentArticles.prev.title }}</div>
+          </router-link>
+          <router-link v-if="adjacentArticles.next" :to="`/article/${adjacentArticles.next.id}`" class="article-nav-next">
+            <div class="article-nav-label">下一篇 →</div>
+            <div class="article-nav-title">{{ adjacentArticles.next.title }}</div>
+          </router-link>
+        </nav>
         <footer class="article-footer">
           <p>发布于 {{ article.createdAt?.slice(0, 10) }}</p>
           <router-link to="/" class="article-home-link">&larr; 返回首页</router-link>

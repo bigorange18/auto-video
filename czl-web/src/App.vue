@@ -1,5 +1,6 @@
 <script setup>
 import TopNav from './components/TopNav.vue'
+import SiteFooter from './components/SiteFooter.vue'
 </script>
 
 <template>
@@ -9,4 +10,5 @@ import TopNav from './components/TopNav.vue'
       <component :is="Component" />
     </Transition>
   </router-view>
+  <SiteFooter />
 </template>

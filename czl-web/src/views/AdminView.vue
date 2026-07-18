@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 
 const session = ref(null)
 const loginForm = reactive({ username: 'admin', password: '' })
@@ -17,6 +17,35 @@ const taskSummary = ref({
   overdue: 0,
 })
 const taskFilters = reactive({ keyword: '', status: 'all' })
+
+// 文章管理
+const allArticles = ref([])
+const editingArticle = ref(null) // null=新建, 有id=编辑
+const articleForm = reactive({
+  title: '',
+  summary: '',
+  content: '',
+  type: 'blog',
+  tags: '',
+  coverImage: '',
+  published: true,
+})
+const articleSaving = ref(false)
+const articleNotice = ref('')
+const articlePreview = ref('')
+const activeTab = ref('content') // 'content' | 'articles' | 'tasks' | 'messages' | 'stats'
+
+// 文章预览（防抖）
+import { renderMarkdown } from '../markdown.js'
+let previewTimer = null
+function updatePreview() {
+  clearTimeout(previewTimer)
+  previewTimer = setTimeout(() => {
+    articlePreview.value = renderMarkdown(articleForm.content)
+  }, 300)
+}
+// 用 watch 监听 content 变化
+watch(() => articleForm.content, updatePreview)
 const taskForm = reactive({
   title: '',
   project: '',
@@ -102,6 +131,7 @@ async function loadDashboard() {
   if (taskSummaryJson.success) {
     taskSummary.value = taskSummaryJson.data
   }
+  await loadArticles()
 }
 
 async function bootstrap() {
@@ -234,6 +264,111 @@ async function removeTask(id) {
   await loadDashboard()
 }
 
+// 加载所有文章（含未发布）
+async function loadArticles() {
+  const res = await fetch('/api/admin/articles')
+  const d = await res.json()
+  if (d.success) allArticles.value = d.data
+}
+
+// 开始编辑文章
+function editArticle(article) {
+  editingArticle.value = article
+  articleForm.title = article.title
+  articleForm.summary = article.summary || ''
+  articleForm.content = article.content || ''
+  articleForm.type = article.type || 'blog'
+  articleForm.tags = (article.tags || []).join(', ')
+  articleForm.coverImage = article.coverImage || ''
+  articleForm.published = article.published !== false
+  articlePreview.value = renderMarkdown(article.content || '')
+  articleNotice.value = ''
+  activeTab.value = 'articles'
+}
+
+// 新建文章
+function newArticle() {
+  editingArticle.value = null
+  articleForm.title = ''
+  articleForm.summary = ''
+  articleForm.content = ''
+  articleForm.type = 'blog'
+  articleForm.tags = ''
+  articleForm.coverImage = ''
+  articleForm.published = true
+  articlePreview.value = ''
+  articleNotice.value = ''
+  activeTab.value = 'articles'
+}
+
+// 取消编辑
+function cancelEdit() {
+  editingArticle.value = null
+  newArticle()
+}
+
+// 保存文章（创建或更新）
+async function saveArticle(publish = true) {
+  if (!articleForm.title.trim() || !articleForm.content.trim()) {
+    articleNotice.value = '标题和内容不能为空'
+    return
+  }
+  articleSaving.value = true
+  articleNotice.value = ''
+
+  const payload = {
+    title: articleForm.title.trim(),
+    summary: articleForm.summary.trim(),
+    content: articleForm.content,
+    type: articleForm.type,
+    tags: articleForm.tags.split(',').map(t => t.trim()).filter(Boolean),
+    coverImage: articleForm.coverImage.trim(),
+    published: publish,
+  }
+
+  const url = editingArticle.value?.id
+    ? `/api/admin/articles/${editingArticle.value.id}`
+    : '/api/admin/articles'
+  const method = editingArticle.value?.id ? 'PUT' : 'POST'
+
+  const res = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  const d = await res.json()
+  articleSaving.value = false
+
+  if (d.success) {
+    articleNotice.value = editingArticle.value?.id ? '文章已更新' : '文章已创建'
+    if (d.data) {
+      editingArticle.value = d.data
+      articleForm.content = d.data.content
+    }
+    await loadArticles()
+  } else {
+    articleNotice.value = d.message || '保存失败'
+  }
+}
+
+// 删除文章
+async function removeArticle(id) {
+  if (!confirm('确定要删除这篇文章吗？此操作不可恢复。')) return
+  await fetch(`/api/admin/articles/${id}`, { method: 'DELETE' })
+  if (editingArticle.value?.id === id) cancelEdit()
+  await loadArticles()
+}
+
+// 切换发布状态
+async function togglePublish(article) {
+  await fetch(`/api/admin/articles/${article.id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ published: article.published === false }),
+  })
+  await loadArticles()
+}
+
 onMounted(bootstrap)
 </script>
 
@@ -270,7 +405,15 @@ onMounted(bootstrap)
         </div>
       </header>
 
-      <section class="panel stats-row">
+      <div class="admin-tabs" style="display:flex;gap:4px;margin-top:16px">
+        <button class="ghost-button" :class="{ active: activeTab === 'content' }" @click="activeTab='content'">站点内容</button>
+        <button class="ghost-button" :class="{ active: activeTab === 'articles' }" @click="activeTab='articles'">文章管理</button>
+        <button class="ghost-button" :class="{ active: activeTab === 'tasks' }" @click="activeTab='tasks'">任务管理</button>
+        <button class="ghost-button" :class="{ active: activeTab === 'messages' }" @click="activeTab='messages'">留言管理</button>
+        <button class="ghost-button" :class="{ active: activeTab === 'stats' }" @click="activeTab='stats'">访问统计</button>
+      </div>
+
+      <section class="panel stats-row" v-if="activeTab === 'stats' || activeTab === 'content'">
         <article>
           <span>留言总数</span>
           <strong>{{ stats.messageCount }}</strong>
@@ -297,7 +440,7 @@ onMounted(bootstrap)
         </article>
       </section>
 
-      <section class="panel tasks-panel">
+      <section class="panel tasks-panel" v-if="activeTab === 'tasks'">
         <div class="section-head">
           <p class="kicker">Tasko</p>
           <h2>任务管理</h2>
@@ -386,8 +529,8 @@ onMounted(bootstrap)
         </div>
       </section>
 
-      <section class="panel admin-grid">
-        <div class="editor-panel">
+      <section class="panel admin-grid" v-if="activeTab === 'content' || activeTab === 'messages'">
+        <div class="editor-panel" v-if="activeTab === 'content'">
           <div class="section-head">
             <p class="kicker">Content</p>
             <h2>站点内容</h2>
@@ -412,7 +555,7 @@ onMounted(bootstrap)
           </div>
         </div>
 
-        <div class="message-panel">
+        <div class="message-panel" v-if="activeTab === 'messages'">
           <div class="section-head">
             <p class="kicker">Inbox</p>
             <h2>留言管理</h2>
@@ -438,7 +581,7 @@ onMounted(bootstrap)
         </div>
       </section>
 
-      <section class="panel">
+      <section class="panel" v-if="activeTab === 'stats'">
         <div class="section-head">
           <p class="kicker">Traffic</p>
           <h2>最近访问</h2>
@@ -449,6 +592,72 @@ onMounted(bootstrap)
             <span>PV {{ item.pv }}</span>
             <span>UV {{ item.uv }}</span>
           </div>
+        </div>
+      </section>
+
+      <!-- 文章管理 -->
+      <section class="panel article-editor" v-if="activeTab === 'articles'">
+        <div class="section-head">
+          <p class="kicker">Editor</p>
+          <h2>{{ editingArticle ? '编辑文章' : '新建文章' }}</h2>
+        </div>
+
+        <div class="article-editor-layout">
+          <form class="article-editor-form" @submit.prevent="saveArticle(true)">
+            <label><span>标题 *</span><input v-model="articleForm.title" type="text" required /></label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <label><span>类型</span>
+                <select v-model="articleForm.type">
+                  <option value="blog">博客</option>
+                  <option value="life">生活</option>
+                  <option value="photo">摄影</option>
+                </select>
+              </label>
+              <label><span>标签（逗号分隔）</span><input v-model="articleForm.tags" type="text" /></label>
+            </div>
+            <label><span>摘要</span><input v-model="articleForm.summary" type="text" /></label>
+            <label><span>封面图片 URL</span><input v-model="articleForm.coverImage" type="text" /></label>
+            <label><span>内容（Markdown）*</span>
+              <textarea id="article-content-editor" v-model="articleForm.content" required></textarea>
+            </label>
+            <div class="article-editor-actions">
+              <button type="submit" :disabled="articleSaving">{{ articleSaving ? '保存中...' : '发布文章' }}</button>
+              <button type="button" class="outline" @click="saveArticle(false)" :disabled="articleSaving">存为草稿</button>
+              <button type="button" class="outline" @click="cancelEdit" v-if="editingArticle">取消编辑</button>
+              <button type="button" class="danger-outline" @click="removeArticle(editingArticle.id)" v-if="editingArticle">删除文章</button>
+              <span class="helper-text">{{ articleNotice }}</span>
+            </div>
+          </form>
+
+          <!-- 预览区 -->
+          <div class="article-editor-preview">
+            <p v-if="!articlePreview" style="color:var(--soft);text-align:center;margin-top:120px">预览区域</p>
+            <div v-else v-html="articlePreview"></div>
+          </div>
+        </div>
+
+        <!-- 文章列表 -->
+        <div class="section-head" style="margin-top:32px">
+          <p class="kicker">Articles</p>
+          <h3>所有文章 ({{ allArticles.length }})</h3>
+        </div>
+        <div class="admin-article-list">
+          <div v-for="a in allArticles" :key="a.id" class="admin-article-item">
+            <div class="admin-article-item-left">
+              <strong>{{ a.title }}</strong>
+              <div class="meta-row">
+                <span :class="['publish-badge', a.published !== false ? 'published' : 'draft']">{{ a.published !== false ? '已发布' : '草稿' }}</span>
+                <span>{{ a.type === 'blog' ? '博客' : a.type === 'life' ? '生活' : '摄影' }}</span>
+                <span>{{ (a.createdAt || '').slice(0, 10) }}</span>
+              </div>
+            </div>
+            <div class="admin-article-item-actions">
+              <button class="ghost-button" @click="editArticle(a)">编辑</button>
+              <button class="ghost-button" @click="togglePublish(a)">{{ a.published !== false ? '下架' : '发布' }}</button>
+              <button class="ghost-button danger" @click="removeArticle(a.id)">删除</button>
+            </div>
+          </div>
+          <p v-if="!allArticles.length" class="helper-text">还没有文章，点击上方新建。</p>
         </div>
       </section>
     </div>

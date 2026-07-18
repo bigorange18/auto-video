@@ -55,6 +55,7 @@ export async function addMessage(payload) {
     email: payload.email,
     body: payload.body,
     read: false,
+    public: false,
     createdAt: new Date().toISOString(),
   }
   messages.push(nextMessage)
@@ -62,10 +63,10 @@ export async function addMessage(payload) {
   return nextMessage
 }
 
-export async function markMessageRead(id, read) {
+export async function markMessageRead(id, fields = {}) {
   const messages = await readJson('messages.json', [])
   const nextMessages = messages.map((message) =>
-    message.id === id ? { ...message, read } : message,
+    message.id === id ? { ...message, ...fields } : message,
   )
   await writeJson('messages.json', nextMessages)
 }
@@ -163,6 +164,60 @@ export async function getArticleById(id) {
   return articles.find((a) => a.id === id && a.published !== false) || null
 }
 
+export async function createArticle(payload) {
+  const articles = await readJson('articles.json', [])
+  const article = {
+    id: makeId('article'),
+    title: String(payload.title || '').trim(),
+    summary: String(payload.summary || '').trim(),
+    content: String(payload.content || '').trim(),
+    type: ['blog', 'life', 'photo'].includes(payload.type) ? payload.type : 'blog',
+    tags: Array.isArray(payload.tags) ? payload.tags.map(t => String(t).trim()).filter(Boolean) : [],
+    coverImage: String(payload.coverImage || '').trim(),
+    published: payload.published !== false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }
+  articles.push(article)
+  await writeJson('articles.json', articles)
+  return article
+}
+
+export async function updateArticle(id, payload) {
+  const articles = await readJson('articles.json', [])
+  let updated = null
+  const next = articles.map(a => {
+    if (a.id !== id) return a
+    updated = {
+      ...a,
+      title: payload.title !== undefined ? String(payload.title).trim() : a.title,
+      summary: payload.summary !== undefined ? String(payload.summary).trim() : a.summary,
+      content: payload.content !== undefined ? String(payload.content).trim() : a.content,
+      type: payload.type !== undefined ? (['blog', 'life', 'photo'].includes(payload.type) ? payload.type : a.type) : a.type,
+      tags: payload.tags !== undefined ? (Array.isArray(payload.tags) ? payload.tags.map(t => String(t).trim()).filter(Boolean) : a.tags) : a.tags,
+      coverImage: payload.coverImage !== undefined ? String(payload.coverImage).trim() : a.coverImage,
+      published: payload.published !== undefined ? payload.published !== false : a.published,
+      updatedAt: new Date().toISOString(),
+    }
+    return updated
+  })
+  await writeJson('articles.json', next)
+  return updated
+}
+
+export async function deleteArticle(id) {
+  const articles = await readJson('articles.json', [])
+  await writeJson('articles.json', articles.filter(a => a.id !== id))
+}
+
+export async function getPublicMessages() {
+  const messages = await readJson('messages.json', [])
+  return messages
+    .filter(m => m.public === true)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .map(({ email, ...rest }) => rest)
+}
+
 export async function getPublicStats() {
   const stats = await readJson('stats.json', {})
   const articles = await readJson('articles.json', [])
@@ -223,3 +278,5 @@ export async function getTaskSummary() {
     overdue,
   }
 }
+
+export { readJson }
