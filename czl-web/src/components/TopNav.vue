@@ -1,12 +1,14 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
-import ThemeToggle from './ThemeToggle.vue'
+import { useDarkMode } from '../composables/useDarkMode.js'
 
 const scrolled = ref(false)
 const showContact = ref(false)
 const messageForm = reactive({ name: '', email: '', body: '' })
 const sending = ref(false)
 const notice = ref('')
+
+const { isDark, toggle } = useDarkMode()
 
 function onScroll() { scrolled.value = window.scrollY > 10 }
 onMounted(() => window.addEventListener('scroll', onScroll, { passive: true }))
@@ -35,10 +37,17 @@ async function submitMessage() {
       <router-link to="/" class="topnav-brand">🍊 大橘</router-link>
       <div class="topnav-links">
         <router-link to="/" exact-active-class="active">首页</router-link>
+        <router-link to="/about" active-class="active">关于</router-link>
+        <router-link to="/projects" active-class="active">项目</router-link>
         <router-link to="/admin">管理</router-link>
+        <button
+          class="theme-toggle"
+          :title="isDark ? '切换到亮色模式' : '切换到暗色模式'"
+          @click="toggle"
+          aria-label="Toggle dark mode"
+        >{{ isDark ? '☀️' : '🌙' }}</button>
         <a href="#" class="contact-trigger" @click.prevent="openContact">联系方式</a>
       </div>
-      <ThemeToggle />
     </div>
   </nav>
 
@@ -61,3 +70,29 @@ async function submitMessage() {
     </div>
   </Teleport>
 </template>
+
+<style scoped>
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  background: none;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0;
+  transition: background .2s, border-color .2s, transform .15s;
+}
+.theme-toggle:hover {
+  background: rgba(0, 0, 0, .06);
+  border-color: var(--line);
+  transform: rotate(20deg);
+}
+:global(html.dark) .theme-toggle:hover {
+  background: rgba(255, 255, 255, .08);
+}
+</style>

@@ -1,8 +1,90 @@
 import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
+import matter from 'gray-matter'
 
 const dataDir = path.resolve(process.cwd(), 'data')
+const postsDir = path.resolve(process.cwd(), 'content', 'posts')
+
+async function ensurePostsDir() {
+  if (!existsSync(postsDir)) {
+    await fs.mkdir(postsDir, { recursive: true })
+  }
+}
+
+// Short-lived in-memory cache to avoid re-reading disk on every request
+let _postsCache = null
+let _postsCacheAt = 0
+const POSTS_CACHE_TTL = 3000 // 3 seconds
+
+function invalidatePostsCache() {
+  _postsCache = null
+  _postsCacheAt = 0
+}
+
+function idToFilename(id) {
+  // Sanitize id to safe filename chars
+  return `${id.replace(/[^a-zA-Z0-9_-]/g, '_')}.md`
+}
+
+function filenameToId(filename) {
+  return filename.replace(/\.md$/, '')
+}
+
+function articleToMd(article) {
+  const { content, id, ...frontmatter } = article
+  // gray-matter stringify: first arg is body, second is data
+  return matter.stringify(content || '', frontmatter)
+}
+
+async function readAllPosts(force = false) {
+  const now = Date.now()
+  if (!force && _postsCache && now - _postsCacheAt < POSTS_CACHE_TTL) {
+    return _postsCache
+  }
+  await ensurePostsDir()
+  let files
+  try {
+    files = await fs.readdir(postsDir)
+  } catch {
+    return []
+  }
+  const mdFiles = files.filter((f) => f.endsWith('.md'))
+  const articles = []
+  for (const file of mdFiles) {
+    try {
+      const raw = await fs.readFile(path.join(postsDir, file), 'utf8')
+      const parsed = matter(raw)
+      const d = parsed.data || {}
+      const mapped = chineseTypeMap[d.type] || d.type
+      const type = allowedEnglishTypes.includes(mapped) ? mapped : 'blog'
+      const tags = Array.isArray(d.tags)
+        ? d.tags.map((t) => String(t).trim()).filter(Boolean)
+        : typeof d.tags === 'string'
+          ? d.tags.split(',').map((t) => t.trim()).filter(Boolean)
+          : []
+      articles.push({
+        id: filenameToId(file),
+        title: String(d.title || '').trim(),
+        summary: String(d.summary || '').trim(),
+        type,
+        tags,
+        coverImage: String(d.coverImage || '').trim(),
+        published: d.published !== false,
+        createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : new Date().toISOString(),
+        updatedAt: d.updatedAt ? new Date(d.updatedAt).toISOString() : new Date().toISOString(),
+        content: parsed.content.trim(),
+      })
+    } catch {
+      // skip malformed files silently
+    }
+  }
+  articles.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+  _postsCache = articles
+  _postsCacheAt = now
+  return articles
+}
 
 function resolveFile(name) {
   return path.join(dataDir, name)
@@ -55,7 +137,6 @@ export async function addMessage(payload) {
     email: payload.email,
     body: payload.body,
     read: false,
-    public: false,
     createdAt: new Date().toISOString(),
   }
   messages.push(nextMessage)
@@ -63,10 +144,10 @@ export async function addMessage(payload) {
   return nextMessage
 }
 
-export async function markMessageRead(id, fields = {}) {
+export async function markMessageRead(id, read) {
   const messages = await readJson('messages.json', [])
   const nextMessages = messages.map((message) =>
-    message.id === id ? { ...message, ...fields } : message,
+    message.id === id ? { ...message, read } : message,
   )
   await writeJson('messages.json', nextMessages)
 }
@@ -152,75 +233,107 @@ export async function deleteTask(id) {
   await writeJson('tasks.json', nextTasks)
 }
 
-export async function getArticles() {
-  const articles = await readJson('articles.json', [])
-  return articles
-    .filter((a) => a.published !== false)
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+const chineseTypeMap = { '博客': 'blog', '生活': 'life', '摄影': 'photo' }
+const allowedEnglishTypes = ['blog', 'life', 'photo']
+
+export async function getAllArticlesAdmin() {
+  return readAllPosts(true)
 }
 
-export async function getArticleById(id) {
-  const articles = await readJson('articles.json', [])
-  return articles.find((a) => a.id === id && a.published !== false) || null
-}
-
-export async function createArticle(payload) {
-  const articles = await readJson('articles.json', [])
+export async function createArticle(data = {}) {
+  if (!String(data.title || '').trim()) throw new Error('文章标题不能为空')
+  if (!String(data.content || '').trim()) throw new Error('文章内容不能为空')
+  await ensurePostsDir()
+  const id = makeId('art')
+  const now = new Date().toISOString()
+  const mapped = chineseTypeMap[data.type] || data.type
+  const type = allowedEnglishTypes.includes(mapped) ? mapped : 'blog'
+  const tags = Array.isArray(data.tags)
+    ? data.tags.map((t) => String(t).trim()).filter(Boolean)
+    : typeof data.tags === 'string'
+      ? data.tags.split(',').map((t) => t.trim()).filter(Boolean)
+      : []
   const article = {
-    id: makeId('article'),
-    title: String(payload.title || '').trim(),
-    summary: String(payload.summary || '').trim(),
-    content: String(payload.content || '').trim(),
-    type: ['blog', 'life', 'photo'].includes(payload.type) ? payload.type : 'blog',
-    tags: Array.isArray(payload.tags) ? payload.tags.map(t => String(t).trim()).filter(Boolean) : [],
-    coverImage: String(payload.coverImage || '').trim(),
-    published: payload.published !== false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    id,
+    title: String(data.title).trim(),
+    summary: String(data.summary || '').trim(),
+    type,
+    tags,
+    coverImage: String(data.coverImage || '').trim(),
+    published: data.published !== false,
+    createdAt: now,
+    updatedAt: now,
+    content: String(data.content).trim(),
   }
-  articles.push(article)
-  await writeJson('articles.json', articles)
+  const md = articleToMd(article)
+  await fs.writeFile(path.join(postsDir, idToFilename(id)), md, 'utf8')
+  invalidatePostsCache()
   return article
 }
 
-export async function updateArticle(id, payload) {
-  const articles = await readJson('articles.json', [])
-  let updated = null
-  const next = articles.map(a => {
-    if (a.id !== id) return a
-    updated = {
-      ...a,
-      title: payload.title !== undefined ? String(payload.title).trim() : a.title,
-      summary: payload.summary !== undefined ? String(payload.summary).trim() : a.summary,
-      content: payload.content !== undefined ? String(payload.content).trim() : a.content,
-      type: payload.type !== undefined ? (['blog', 'life', 'photo'].includes(payload.type) ? payload.type : a.type) : a.type,
-      tags: payload.tags !== undefined ? (Array.isArray(payload.tags) ? payload.tags.map(t => String(t).trim()).filter(Boolean) : a.tags) : a.tags,
-      coverImage: payload.coverImage !== undefined ? String(payload.coverImage).trim() : a.coverImage,
-      published: payload.published !== undefined ? payload.published !== false : a.published,
-      updatedAt: new Date().toISOString(),
-    }
-    return updated
-  })
-  await writeJson('articles.json', next)
+export async function updateArticle(id, data = {}) {
+  const all = await readAllPosts(true)
+  const existing = all.find((a) => a.id === id)
+  if (!existing) return null
+  const mapped = chineseTypeMap[data.type] || data.type
+  const type = allowedEnglishTypes.includes(mapped) ? mapped : existing.type
+  const tags = data.tags !== undefined
+    ? (Array.isArray(data.tags)
+        ? data.tags.map((t) => String(t).trim()).filter(Boolean)
+        : String(data.tags).split(',').map((t) => t.trim()).filter(Boolean))
+    : existing.tags
+  const updated = {
+    ...existing,
+    title: data.title !== undefined ? String(data.title).trim() : existing.title,
+    summary: data.summary !== undefined ? String(data.summary).trim() : existing.summary,
+    type,
+    tags,
+    coverImage: data.coverImage !== undefined ? String(data.coverImage).trim() : existing.coverImage,
+    published: data.published !== undefined ? (data.published !== false && data.published !== 'false') : existing.published,
+    content: data.content !== undefined ? String(data.content).trim() : existing.content,
+    updatedAt: new Date().toISOString(),
+  }
+  const md = articleToMd(updated)
+  await fs.writeFile(path.join(postsDir, idToFilename(id)), md, 'utf8')
+  invalidatePostsCache()
   return updated
 }
 
 export async function deleteArticle(id) {
-  const articles = await readJson('articles.json', [])
-  await writeJson('articles.json', articles.filter(a => a.id !== id))
+  const filePath = path.join(postsDir, idToFilename(id))
+  try {
+    await fs.unlink(filePath)
+    invalidatePostsCache()
+    return true
+  } catch {
+    return false
+  }
 }
 
-export async function getPublicMessages() {
-  const messages = await readJson('messages.json', [])
-  return messages
-    .filter(m => m.public === true)
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    .map(({ email, ...rest }) => rest)
+export async function getArticles() {
+  const all = await readAllPosts()
+  return all.filter((a) => a.published !== false)
+}
+
+export async function getArticleById(id) {
+  const all = await readAllPosts()
+  return all.find((a) => a.id === id && a.published !== false) || null
+}
+
+// Save a raw .md file directly (used by file upload endpoint)
+export async function saveArticleFile(filename, content) {
+  await ensurePostsDir()
+  // Sanitize filename
+  const safe = path.basename(filename).replace(/[^a-zA-Z0-9_.-]/g, '_')
+  const dest = path.join(postsDir, safe.endsWith('.md') ? safe : `${safe}.md`)
+  await fs.writeFile(dest, content, 'utf8')
+  invalidatePostsCache()
+  return filenameToId(path.basename(dest))
 }
 
 export async function getPublicStats() {
   const stats = await readJson('stats.json', {})
-  const articles = await readJson('articles.json', [])
+  const articles = await getArticles()
   const content = await readJson('content.json', {})
 
   let totalPV = 0
@@ -278,5 +391,3 @@ export async function getTaskSummary() {
     overdue,
   }
 }
-
-export { readJson }

@@ -26,17 +26,23 @@
     {
       "title": "个人主页重构",
       "desc": "用 Vue 和 Node 重建现有站点，去掉高风险后端。",
-      "link": "https://www.czl.asia/"
+      "link": "https://www.czl.asia/",
+      "tech": ["Vue 3", "Node.js", "Express", "Vite"],
+      "github": "https://github.com/placeholder/czl-web"
     },
     {
       "title": "内容工作流整理",
       "desc": "把日志、方法和专题拆分成更清晰的内容层次。",
-      "link": "#contact"
+      "link": "#contact",
+      "tech": ["Markdown", "JavaScript", "Node.js"],
+      "github": "https://github.com/placeholder/content-workflow"
     },
     {
       "title": "部署与维护手册",
       "desc": "整理上线、校验和回滚流程，减少临时操作。",
-      "link": "#contact"
+      "link": "#contact",
+      "tech": ["Docker", "Nginx", "Shell", "Git"],
+      "github": "https://github.com/placeholder/deploy-handbook"
     }
   ],
   "contact": {

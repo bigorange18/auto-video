@@ -4,12 +4,15 @@
     "title": "重构首页线框布局",
     "project": "czl-web",
     "priority": "high",
-    "status": "in_progress",
+    "status": "done",
     "dueDate": "2026-05-28",
-    "tags": ["frontend", "layout"],
+    "tags": [
+      "frontend",
+      "layout"
+    ],
     "notes": "按截图继续微调留白、标题比例和导航节奏。",
     "createdAt": "2026-05-25T10:30:00.000Z",
-    "updatedAt": "2026-05-25T10:30:00.000Z"
+    "updatedAt": "2026-07-21T06:51:41.148Z"
   },
   {
     "id": "task_demo_02",
@@ -18,7 +21,10 @@
     "priority": "high",
     "status": "todo",
     "dueDate": "2026-05-29",
-    "tags": ["backend", "api"],
+    "tags": [
+      "backend",
+      "api"
+    ],
     "notes": "新增任务 CRUD、筛选和统计接口。",
     "createdAt": "2026-05-25T11:00:00.000Z",
     "updatedAt": "2026-05-25T11:00:00.000Z"
@@ -30,7 +36,10 @@
     "priority": "medium",
     "status": "done",
     "dueDate": "2026-05-24",
-    "tags": ["docs", "deploy"],
+    "tags": [
+      "docs",
+      "deploy"
+    ],
     "notes": "完成本地部署、环境变量和回滚说明。",
     "createdAt": "2026-05-24T09:15:00.000Z",
     "updatedAt": "2026-05-24T18:00:00.000Z"

@@ -25,3 +25,4 @@ logs/
 *.diag.env
 .github/skills/*
 .claude/skills/*
+*.zip

@@ -1,4 +1,7 @@
 import path from 'node:path'
+import fs from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import crypto from 'node:crypto'
 import bcrypt from 'bcryptjs'
 import express from 'express'
 import session from 'express-session'
@@ -6,26 +9,51 @@ import {
   addTask,
   addMessage,
   createArticle,
+  deleteArticle,
   deleteTask,
   deleteMessage,
-  deleteArticle,
   getAdmin,
+  getAllArticlesAdmin,
   getArticleById,
   getArticles,
   getContent,
   getMessages,
-  getPublicMessages,
   getPublicStats,
   getStats,
   getTasks,
   getTaskSummary,
   markMessageRead,
-  readJson,
+  saveArticleFile,
   saveContent,
   trackVisit,
   updateArticle,
   updateTask,
 } from './store.js'
+
+// Simple in-memory rate limiter
+function makeRateLimiter(maxRequests, windowMs) {
+  const map = new Map()
+  return function (req, res, next) {
+    const ip =
+      (typeof req.headers['x-forwarded-for'] === 'string'
+        ? req.headers['x-forwarded-for'].split(',')[0].trim()
+        : req.ip) || 'unknown'
+    const now = Date.now()
+    const entry = map.get(ip) || { count: 0, resetAt: now + windowMs }
+    if (now > entry.resetAt) {
+      entry.count = 0
+      entry.resetAt = now + windowMs
+    }
+    entry.count++
+    map.set(ip, entry)
+    if (entry.count > maxRequests) {
+      return res.status(429).json({ success: false, message: '请求过于频繁，请稍后再试' })
+    }
+    next()
+  }
+}
+const messagesLimiter = makeRateLimiter(3, 10 * 60 * 1000)   // 3/10min
+const loginLimiter = makeRateLimiter(5, 15 * 60 * 1000)       // 5/15min
 
 function readBoolean(value, fallback = false) {
   if (value === undefined) {
@@ -42,6 +70,12 @@ const trustProxy = readBoolean(process.env.TRUST_PROXY)
 const cookieSecure = readBoolean(process.env.COOKIE_SECURE, siteUrl.startsWith('https://'))
 const rootDir = process.cwd()
 const distDir = path.join(rootDir, 'dist')
+const uploadsDir = path.join(rootDir, 'public', 'uploads')
+
+// Ensure uploads directory exists
+if (!existsSync(uploadsDir)) {
+  fs.mkdir(uploadsDir, { recursive: true }).catch(() => {})
+}
 
 if (trustProxy) {
   app.set('trust proxy', 1)
@@ -69,24 +103,6 @@ function requireAuth(req, res, next) {
   next()
 }
 
-const rateLimitMap = new Map()
-function rateLimit(maxRequests = 3, windowMs = 60000) {
-  return (req, res, next) => {
-    const ip = req.ip || 'unknown'
-    const now = Date.now()
-    const record = rateLimitMap.get(ip)
-    if (record && now - record.start < windowMs) {
-      record.count++
-      if (record.count > maxRequests) {
-        return res.status(429).json({ success: false, message: '请求过于频繁，请稍后再试' })
-      }
-    } else {
-      rateLimitMap.set(ip, { start: now, count: 1 })
-    }
-    next()
-  }
-}
-
 function sanitizeContent(raw) {
   return {
     site: raw.site || {},
@@ -105,7 +121,7 @@ app.get('/api/public/content', async (req, res) => {
   res.json({ success: true, data: sanitizeContent(content) })
 })
 
-app.post('/api/public/messages', rateLimit(3, 60000), async (req, res) => {
+app.post('/api/public/messages', messagesLimiter, async (req, res) => {
   const { name, email, body } = req.body || {}
   if (!name || !email || !body) {
     return res.status(400).json({ success: false, message: '请完整填写留言信息' })
@@ -122,24 +138,14 @@ app.post('/api/public/messages', rateLimit(3, 60000), async (req, res) => {
 })
 
 app.get('/api/public/articles', async (req, res) => {
-  const page = Math.max(1, parseInt(req.query.page) || 1)
-  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 0))
   const all = await getArticles()
-
-  if (!limit) {
-    const data = all.map(({ content, ...rest }) => rest)
-    return res.json({ success: true, data })
-  }
-  const total = all.length
-  const totalPages = Math.ceil(total / limit)
-  const start = (page - 1) * limit
-  res.json({
-    success: true,
-    data: all.slice(start, start + limit).map(({ content, ...rest }) => rest),
-    total,
-    page,
-    totalPages,
-  })
+  const stripped = all.map(({ content, ...rest }) => rest)
+  const page = Math.max(1, parseInt(req.query.page) || 1)
+  const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize) || 10))
+  const total = stripped.length
+  const totalPages = Math.ceil(total / pageSize)
+  const articles = stripped.slice((page - 1) * pageSize, page * pageSize)
+  res.json({ success: true, data: { articles, total, page, pageSize, totalPages } })
 })
 
 app.get('/api/public/articles/:id', async (req, res) => {
@@ -155,7 +161,7 @@ app.get('/api/public/stats', async (_req, res) => {
   res.json({ success: true, data: stats })
 })
 
-app.post('/api/admin/login', async (req, res) => {
+app.post('/api/admin/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body || {}
   const admin = await getAdmin()
   if (!username || !password || username !== admin.username) {
@@ -196,7 +202,7 @@ app.get('/api/admin/messages', requireAuth, async (_req, res) => {
 })
 
 app.patch('/api/admin/messages/:id', requireAuth, async (req, res) => {
-  await markMessageRead(req.params.id, req.body || {})
+  await markMessageRead(req.params.id, Boolean(req.body?.read))
   res.json({ success: true, message: '留言状态已更新' })
 })
 
@@ -257,74 +263,86 @@ app.delete('/api/admin/tasks/:id', requireAuth, async (req, res) => {
   res.json({ success: true, message: '任务已删除' })
 })
 
-// === 文章 CRUD（需认证）===
-
 app.get('/api/admin/articles', requireAuth, async (_req, res) => {
-  const articles = await readJson('articles.json', [])
-  const sorted = [...articles].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-  res.json({ success: true, data: sorted })
+  const articles = await getAllArticlesAdmin()
+  res.json({ success: true, data: articles })
 })
 
 app.post('/api/admin/articles', requireAuth, async (req, res) => {
-  const payload = req.body || {}
-  if (!payload.title || !String(payload.title).trim()) {
-    return res.status(400).json({ success: false, message: '文章标题不能为空' })
+  const { title, content, summary, type, tags, coverImage, published } = req.body || {}
+  try {
+    const article = await createArticle({ title, content, summary, type, tags, coverImage, published })
+    res.json({ success: true, message: '文章已创建', data: article })
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message || '创建失败' })
   }
-  if (!payload.content || !String(payload.content).trim()) {
-    return res.status(400).json({ success: false, message: '文章内容不能为空' })
-  }
-  const article = await createArticle(payload)
-  res.json({ success: true, data: article })
 })
 
 app.put('/api/admin/articles/:id', requireAuth, async (req, res) => {
-  const updated = await updateArticle(req.params.id, req.body || {})
-  if (!updated) return res.status(404).json({ success: false, message: '文章不存在' })
-  res.json({ success: true, data: updated })
+  const { title, content, summary, type, tags, coverImage, published } = req.body || {}
+  const article = await updateArticle(req.params.id, { title, content, summary, type, tags, coverImage, published })
+  if (!article) {
+    return res.status(404).json({ success: false, message: '文章不存在' })
+  }
+  res.json({ success: true, message: '文章已更新', data: article })
 })
 
 app.delete('/api/admin/articles/:id', requireAuth, async (req, res) => {
-  await deleteArticle(req.params.id)
+  const ok = await deleteArticle(req.params.id)
+  if (!ok) {
+    return res.status(404).json({ success: false, message: '文章不存在' })
+  }
   res.json({ success: true, message: '文章已删除' })
 })
 
-// === 公开接口 ===
-
-app.get('/api/public/guestbook', async (_req, res) => {
-  const messages = await getPublicMessages()
-  res.json({ success: true, data: messages })
+// Upload a raw .md file — body is raw text, filename passed as query param
+app.post('/api/admin/articles/upload', requireAuth, express.text({ type: '*/*', limit: '2mb' }), async (req, res) => {
+  const filename = String(req.query.filename || '').trim()
+  if (!filename) {
+    return res.status(400).json({ success: false, message: '请提供文件名 ?filename=xxx.md' })
+  }
+  if (!filename.endsWith('.md')) {
+    return res.status(400).json({ success: false, message: '只支持 .md 文件' })
+  }
+  const content = req.body
+  if (!content || typeof content !== 'string' || !content.trim()) {
+    return res.status(400).json({ success: false, message: '文件内容为空' })
+  }
+  try {
+    const id = await saveArticleFile(filename, content)
+    res.json({ success: true, message: '文件已上传', data: { id } })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || '上传失败' })
+  }
 })
 
-app.get('/api/public/rss', async (_req, res) => {
-  const articles = await getArticles()
-  const content = await getContent()
-  const siteTitle = content.site?.title || '大橘'
-  const siteUrl = process.env.SITE_URL || `http://127.0.0.1:${port}`
-
-  const items = articles.slice(0, 20).map(a => `
-    <item>
-      <title><![CDATA[${a.title}]]></title>
-      <link>${siteUrl}/article/${a.id}</link>
-      <description><![CDATA[${a.summary || ''}]]></description>
-      <pubDate>${new Date(a.createdAt).toUTCString()}</pubDate>
-      <guid>${siteUrl}/article/${a.id}</guid>
-    </item>`).join('\n')
-
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
-  <channel>
-    <title>${siteTitle}</title>
-    <link>${siteUrl}</link>
-    <description>${content.site?.subtitleName || '个人博客'}</description>
-    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
-    ${items}
-  </channel>
-</rss>`
-
-  res.type('application/rss+xml').send(xml)
+// Image upload — accepts raw binary body, filename in query param
+app.post('/api/admin/upload/image', requireAuth, express.raw({ type: ['image/*'], limit: '10mb' }), async (req, res) => {
+  const original = String(req.query.filename || '').trim()
+  if (!original) {
+    return res.status(400).json({ success: false, message: '请提供文件名 ?filename=xxx.jpg' })
+  }
+  const ext = path.extname(original).toLowerCase()
+  const allowed = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif']
+  if (!allowed.includes(ext)) {
+    return res.status(400).json({ success: false, message: '仅支持 jpg/png/gif/webp/avif 格式' })
+  }
+  if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+    return res.status(400).json({ success: false, message: '文件内容为空' })
+  }
+  const hash = crypto.createHash('sha1').update(req.body).digest('hex').slice(0, 8)
+  const filename = `${Date.now()}_${hash}${ext}`
+  const dest = path.join(uploadsDir, filename)
+  try {
+    await fs.writeFile(dest, req.body)
+    res.json({ success: true, url: `/uploads/${filename}` })
+  } catch (err) {
+    res.status(500).json({ success: false, message: '保存失败' })
+  }
 })
 
 app.use(express.static(distDir))
+app.use('/uploads', express.static(uploadsDir))
 app.use((req, res) => {
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ success: false, message: '接口不存在' })
