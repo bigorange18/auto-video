@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- 叶子 -->
+  <path d="M30 8 C32 2 40 1 44 3 C42 7 38 10 30 8 Z" fill="#22c55e"/>
+  <path d="M30 8 C28 14 30 18 34 19 C38 14 36 9 30 8 Z" fill="#4ade80"/>
+  <!-- 橙子主体 -->
+  <circle cx="32" cy="37" r="24" fill="#f97316"/>
+  <circle cx="32" cy="37" r="24" fill="none" stroke="#ea580c" stroke-width="2"/>
+  <!-- 橙色高光 -->
+  <circle cx="32" cy="37" r="18" fill="#fb923c"/>
+  <!-- 果肉纹理 -->
+  <g stroke="#f97316" stroke-width="2.5" stroke-linecap="round">
+    <line x1="32" y1="21" x2="32" y2="53"/>
+    <line x1="16" y1="37" x2="48" y2="37"/>
+    <line x1="20.7" y1="25.7" x2="43.3" y2="48.3"/>
+    <line x1="43.3" y1="25.7" x2="20.7" y2="48.3"/>
+  </g>
+  <!-- 中心点 -->
+  <circle cx="32" cy="37" r="3" fill="#fb923c" stroke="#f97316" stroke-width="1.5"/>
+</svg>
