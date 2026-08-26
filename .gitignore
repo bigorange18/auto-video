@@ -26,3 +26,4 @@ logs/
 .github/skills/*
 .claude/skills/*
 *.zip
+*build/
