@@ -12,7 +12,8 @@
 | 路径 | 是什么 |
 |---|---|
 | `readme.md` | 股市推送工作流的对外说明：数据源、运行命令、推送方式 |
-| `.agent.md` | 这条线的开发日志：每次改了什么、为什么改、怎么验证 |
+| `AGENTS.md` | **项目说明书（AI 常驻上下文）**：技术栈、目录职责、命令、环境变量、约定、坑、排障 |
+| `DEVLOG.md` | 改动流水，按时间倒序 |
 | `.github/workflows/foreign-market-content.yml` | 每天 07:30 定时执行，跑在自建 runner |
 | `bash/run_digest.sh` | 服务器本地 crontab 入口（08:30） |
 | `scripts/foreign_market_digest.py` | 入口：参数解析 + 调服务 |

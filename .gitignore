@@ -27,3 +27,9 @@ logs/
 .claude/skills/*
 *.zip
 *build/
+
+# C++ 编译产物
+project/ccstart/main_test
+project/ccstart/p2
+project/ccstart/*.exe
+project/ccstart/*.o
