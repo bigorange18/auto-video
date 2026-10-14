@@ -1,253 +1,149 @@
-2026-04-08
+# auto-video
 
-# 海外热点股市自动化工作流
+个人知识库 + 一条在跑的自动化工作流。
 
-这个仓库现在提供一套最小可用的自动化流程，用于：
+这个仓库最初想做 YouTube 视频搬运（`scripts/video_pipeline.py` 是那份草稿，只到 Phase 1），但实际跑起来的是另一条线：**海外热点股市资讯 → 中文文案 → 多平台推送**。视频搬运一直没推进，仓库名也就成了历史遗留。
 
-- 自动抓取海外股市热点新闻
-- 自动筛选高热度市场主题
-- 自动生成中文文案素材
-- 通过 GitHub Actions 定时执行并产出结果文件
-- 每天自动推送结果到飞书
-- 每天自动推送结果到微信
-- 自动创建微信公众号图文草稿
+## 仓库里有什么
 
-## 目录
+五个互不相关的子项目共存，各自依赖和约定都不互通：
 
-- `scripts/foreign_market_digest.py`：抓取 RSS、筛选热点、生成文案
-- `bin/run_digest.sh`：服务器本地 cron 运行入口
-- `.github/workflows/foreign-market-content.yml`：定时运行工作流
-- `output/`：脚本运行后的产物目录（默认不入库）
+| 目录 | 是什么 | 详细约定 |
+|---|---|---|
+| `scripts/` | 股市推送工作流，唯一有 CI 定时任务的 | [scripts/AGENTS.md](scripts/AGENTS.md) |
+| `czl-web/` | Vue 3 + Express 个人站与内容后台 | [czl-web/AGENTS.md](czl-web/AGENTS.md) |
+| `stereo/` | 双目立体匹配学习代码（PyTorch） | [stereo/AGENTS.md](stereo/AGENTS.md) |
+| `wechat_tech/` | 科技日报自动化 | [wechat_tech/README.md](wechat_tech/README.md) |
+| `project/ccstart/` | C++ 刷题练习 | — |
 
-## 数据来源
+**全仓库导航看 [INDEX.md](INDEX.md)** —— 想知道某个东西记在哪，从那里进。
 
-脚本当前使用 Google News RSS 搜索，覆盖：
+约定与坑分布在各目录的 `AGENTS.md`，改某条线之前先读对应那份。
 
-- 美股主线：NASDAQ、NYSE、S&P 500、Dow Jones
-- 欧股主线：STOXX 600、FTSE、DAX
-- 亚太主线：Nikkei、Hang Seng、MSCI Asia
+---
 
-## 本地运行
+## 海外热点股市自动化工作流
 
-仓库不依赖第三方 Python 包，直接运行即可：
+抓外盘 RSS + 国内热榜 → 筛选评分 → AI 改写中文文案 → 投递到 PushPlus / 飞书 / 微信公众号草稿箱。
+
+每天 07:30（UTC）定时执行，结果作为 artifact 上传。
+
+## 需要什么
+
+**Python 3.10+**（代码用了 PEP 604 语法）。
+
+**`Pillow` 是必装的**——`scripts/foreign_market_digest_service.py` 顶层直接 import，装不上就跑不起来：
 
 ```bash
+pip install Pillow
+```
+
+`beautifulsoup4` 只有 `wechat_tech/` 那条线需要，跑股市推送用不到。
+
+其余全部用标准库，LLM 走 HTTP 调OpenAI 兼容接口，不需要 SDK。
+
+> 仓库根目录没有 requirements.txt，要手动装。
+>
+> 注意：仓库里的 `.venv/` 是 Linux 布局（`bin/` 而非 Windows 的 `Scripts/`），在 Windows 上用不了。Windows 下建议另建虚拟环境：
+>
+> ```bash
+> python -m venv .venv-win
+> .venv-win/Scripts/pip install Pillow
+> ```
+
+密钥只走环境变量，不要写进代码或提交。
+
+## 快速开始
+
+确认已装好 Pillow 后（见上）：
+
+```bash
+# 不带推送，只生成产物
 python scripts/foreign_market_digest.py --hours 24 --limit 10 --select-limit 5
 ```
 
-推送飞书：
-
-```bash
-python scripts/foreign_market_digest.py --hours 24 --limit 10 --select-limit 5 --feishu-webhook "$FEISHU_WEBHOOK_URL"
-```
-
-推送微信（PushPlus）：
-
-```bash
-python scripts/foreign_market_digest.py --hours 24 --limit 10 --select-limit 5 --pushplus-token "$PUSHPLUS_TOKEN"
-```
-
-创建微信公众号草稿：
-
-```bash
-python scripts/foreign_market_digest.py --hours 24 --limit 10 --select-limit 5 --wechat-app-id "$WECHAT_APP_ID" --wechat-app-secret "$WECHAT_APP_SECRET" --wechat-author "你的公众号作者名"
-```
-
-启用大模型梳理（OpenAI 兼容接口）：
+启用 LLM 精炼：
 
 ```bash
 python scripts/foreign_market_digest.py \
-	--hours 24 --limit 10 --select-limit 5 \
-	--llm-enabled \
-	--llm-provider openai \
-	--llm-base-url "$LLM_BASE_URL" \
-	--llm-api-key "$LLM_API_KEY" \
-	--llm-model "${LLM_MODEL:-gpt-4o-mini}"
+  --llm-enabled \
+  --llm-provider qwen \
+  --llm-api-key "$DASHSCOPE_API_KEY" \
+  --llm-model qwen-plus
 ```
 
-启用千问（阿里云 DashScope 兼容接口）：
+`--llm-provider` 支持 `openai` / `qwen` / `deepseek`，都是 OpenAI 兼容协议。不显式传 `--llm-base-url` 时会自动用各家默认地址。
+
+完整参数见 [scripts/AGENTS.md](scripts/AGENTS.md)。
+
+## 数据来源
+
+外盘走主备多源策略（CNBC、Dow Jones/MarketWatch、Nasdaq、Yahoo Finance、Google News 兜底），单源失败不中断整体。国内热榜走抖音、头条、百度三个 API。
+
+评分权重、主题关键词、feed 地址都在 `scripts/digest_config.py`，改配置不用动代码。
+
+## 输出
+
+| 文件 | 内容 |
+|---|---|
+| `output/foreign_market_hotspots.json` | 热点列表、主题分类、摘要、标题建议、短视频口播、社媒文案 |
+| `output/foreign_market_copy.md` | 适合直接给运营/剪辑看的 Markdown |
+
+`markdown` 面向人工使用，`json` 供下游程序消费。两者都不入库。
+
+日志按天滚动：`logs/digest-YYYY-MM-DD.log`。
+
+## 定时任务
+
+### 方式一：GitHub Actions（推荐）
+
+工作流文件 `.github/workflows/foreign-market-content.yml`，跑在自建 runner 上（需要固定 IP）。
+
+在仓库 `Settings -> Secrets and variables -> Actions` 配置：
+
+| Key | 说明 |
+|---|---|
+| `PUSHPLUS_TOKEN` | PushPlus token，推送到自己微信 |
+| `FEISHU_WEBHOOK_URL` | 飞书机器人 webhook |
+| `WECHAT_APP_ID` | 公众号 AppID |
+| `WECHAT_APP_SECRET` | 公众号 AppSecret |
+| `WECHAT_AUTHOR` | 草稿作者名（用 `vars` 而非 `secrets`） |
+
+推送渠道都可选，不配就不推那个渠道。
+
+### 方式二：服务器 cron
 
 ```bash
-python scripts/foreign_market_digest.py \
-	--hours 24 --limit 10 --select-limit 5 \
-	--llm-enabled \
-	--llm-provider qwen \
-	--llm-api-key "$DASHSCOPE_API_KEY" \
-	--llm-model "${QWEN_MODEL:-qwen-plus}"
+# 照着 AGENTS.md 里的环境变量表建一个 .env.digest
+$EDITOR .env.digest
+bash bash/run_digest.sh              # 先手动验一次
 ```
 
-如果不显式传 `--llm-base-url`，`qwen` 会默认使用：
-
-```text
-https://dashscope.aliyuncs.com/compatible-mode/v1
-```
-
-启用 DeepSeek（OpenAI 兼容接口）：
-
-```bash
-python scripts/foreign_market_digest.py \
-	--hours 24 --limit 10 --select-limit 5 \
-	--llm-enabled \
-	--llm-provider deepseek \
-	--llm-api-key "$DEEPSEEK_API_KEY" \
-	--llm-model "${DEEPSEEK_MODEL:-deepseek-chat}"
-```
-
-如果不显式传 `--llm-base-url`，`deepseek` 会默认使用：
-
-```text
-https://api.deepseek.com/v1
-```
-
-说明：默认会先抓取最多 10 条候选（`--limit`），再由大模型打分筛选 5 条（`--select-limit`）用于最终公众号内容。
-
-也可以通过环境变量配置：
-
-- `LLM_PROVIDER`（`openai`、`qwen` 或 `deepseek`）
-- `LLM_BASE_URL`（默认 `https://api.openai.com/v1`）
-- `LLM_API_KEY`
-- `LLM_MODEL`（默认 `gpt-4o-mini`）
-- `LLM_TIMEOUT`（默认 `25` 秒）
-- `DIGEST_LLM_ENABLED=1`（用于 `bin/run_digest.sh` 启用）
-
-千问也支持下面这些更直观的环境变量：
-
-- `DASHSCOPE_API_KEY`
-- `DASHSCOPE_BASE_URL`（默认 `https://dashscope.aliyuncs.com/compatible-mode/v1`）
-- `QWEN_API_KEY`（可作为 `DASHSCOPE_API_KEY` 的别名）
-- `QWEN_MODEL`（默认 `qwen-plus`）
-
-DeepSeek 也支持下面这些环境变量：
-
-- `DEEPSEEK_API_KEY`
-- `DEEPSEEK_BASE_URL`（默认 `https://api.deepseek.com/v1`）
-- `DEEPSEEK_KEY`（可作为 `DEEPSEEK_API_KEY` 的别名）
-- `DEEPSEEK_MODEL`（默认 `deepseek-chat`）
-
-服务器上推荐这样配置 `.env.digest`：
-
-```bash
-DIGEST_LLM_ENABLED=1
-LLM_PROVIDER=qwen
-DASHSCOPE_API_KEY=你的千问Key
-QWEN_MODEL=qwen-plus
-```
-
-如果你用 DeepSeek，可以改为：
-
-```bash
-DIGEST_LLM_ENABLED=1
-LLM_PROVIDER=deepseek
-DEEPSEEK_API_KEY=你的DeepSeekKey
-DEEPSEEK_MODEL=deepseek-chat
-```
-
-默认输出：
-
-- `output/foreign_market_hotspots.json`
-- `output/foreign_market_copy.md`
-
-## 服务器 Cron
-
-如果你不想继续折腾 GitHub Actions，推荐直接在服务器上用 `cron` 定时执行。
-
-1. 复制环境模板：
-
-```bash
-cp .env.digest.example .env.digest
-```
-
-2. 编辑 `.env.digest`，填入你的：
-
-- `PUSHPLUS_TOKEN`
-- `WECHAT_APP_ID`
-- `WECHAT_APP_SECRET`
-- `WECHAT_AUTHOR`
-
-3. 先手动执行一次：
-
-```bash
-bash bin/run_digest.sh
-```
-
-4. 配置定时任务：
-
-```bash
-crontab -e
-```
-
-例如每天早上 `08:30` 执行：
+脚本默认读 `DIGEST_ENV_FILE` 指向的文件（默认 `.env.digest`，可用该变量覆盖）。
 
 ```cron
-30 8 * * * /bin/bash /home/orange/auto-video/bin/run_digest.sh
+30 8 * * * /bin/bash /home/orange/auto-video/bash/run_digest.sh
 ```
 
-5. 查看日志：
+> ⚠️ 定时任务失败是静默的，只有日志能看到。改完推送链路一定要手动验一次。
 
-```bash
-tail -f /home/orange/auto-video/cron.log
-```
+## 环境变量
 
-## 输出内容
+除了上面五个推送凭据，LLM 部分支持：
 
-`json` 文件包含：
+| 变量 | 说明 |
+|---|---|
+| `DIGEST_LLM_ENABLED` | 设 `1` 才启用 LLM（`run_digest.sh` 用） |
+| `LLM_PROVIDER` | `openai` / `qwen` / `deepseek`，不设则按 key 是否存在自动推断 |
+| `LLM_BASE_URL` · `LLM_API_KEY` · `LLM_MODEL` | 通用覆盖项 |
+| `DASHSCOPE_API_KEY` · `QWEN_MODEL` | 千问专用，等价写法 |
+| `DEEPSEEK_API_KEY` · `DEEPSEEK_MODEL` | DeepSeek 专用 |
+| `LLM_TIMEOUT` | 请求超时，默认 25 秒 |
 
-- 热点文章列表
-- 主题分类
-- 一句话摘要
-- 标题建议
-- 短视频口播文案
-- 社媒短文案
+完整列表见 [scripts/AGENTS.md](scripts/AGENTS.md)。
 
-`markdown` 文件适合直接给运营、剪辑或内容团队使用。
+## 已知问题
 
-## GitHub Actions
-
-工作流文件：`.github/workflows/foreign-market-content.yml`
-
-触发方式：
-
-- 手动触发：`workflow_dispatch`
-- 定时触发：每天 UTC `07:30`
-
-执行完成后，结果会作为 Actions artifact 上传。
-
-## 微信配置
-
-如果你要把消息直接推到自己的微信，推荐用 PushPlus。
-
-1. 打开 `https://www.pushplus.plus/`
-2. 用微信扫码登录
-3. 在后台复制你的 `token`
-4. 在 GitHub 仓库 `Settings -> Secrets and variables -> Actions` 添加：`PUSHPLUS_TOKEN`
-
-脚本会把日报以 Markdown 形式推送到你的微信。
-
-## 飞书配置
-
-需要先在 GitHub 仓库的 `Settings -> Secrets and variables -> Actions` 中添加：
-
-- `FEISHU_WEBHOOK_URL`
-
-脚本会在生成日报后，自动把摘要、热点清单、标题建议和社媒文案以飞书卡片消息推送到机器人。
-
-## 微信公众号配置
-
-如果你要把内容同步到微信公众号后台草稿箱，需要在 GitHub 中配置：
-
-- `WECHAT_APP_ID`
-- `WECHAT_APP_SECRET`
-
-可选变量：
-
-- `WECHAT_AUTHOR`
-
-配置路径：`Settings -> Secrets and variables -> Actions`
-
-脚本会自动：
-
-- 获取公众号 `access_token`
-- 上传默认封面图
-- 创建一篇图文草稿到公众号后台
-
-创建完成后，你可以在微信公众号后台的草稿箱中查看并决定是否群发。
+- **封面是微信草稿失败的头号原因。** 尺寸硬约束 900×500（最小 640×360），尺寸不对微信直接拒收。排查看日志里的 `errcode` 和 `cover candidate score`
+- **CI 里 secret 走命令行参数传递**，会出现在进程列表里，同机其他用户 `ps` 可见
+- **全仓没有测试**，改完用 `python -c "import ast..."` 做语法检查，推送链路改动手动验

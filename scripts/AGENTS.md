@@ -51,7 +51,7 @@ python scripts/foreign_market_digest.py --llm-enabled --llm-provider qwen
 - **日志走 `logging`**，不用 `print`。格式由 `digest_logging.py` 统一
 - **单源失败不中断**：抓取是主备降级逻辑，任一源挂掉不能让整段失败
 - **LLM 输出必须容错**：模型返回的 JSON 有概率带 markdown 包裹或多余字段，需清洗 + 降级兜底
-- **不引入重依赖**：目前只有 `Pillow`（封面）和 `bs4`（抓 og:image），加包前先想清楚能不能用标准库
+- **不引入重依赖**：`Pillow` 是顶层 import，必装。`beautifulsoup4` 只有 `wechat_tech/` 用，本目录不需要。加包前先想清楚能不能用标准库
 
 ## 坑
 
