@@ -12,7 +12,10 @@
 | 路径 | 是什么 |
 |---|---|
 | `readme.md` | 股市推送工作流的对外说明：数据源、运行命令、推送方式 |
-| `AGENTS.md` | **项目说明书（AI 常驻上下文）**：技术栈、目录职责、命令、环境变量、约定、坑、排障 |
+| `AGENTS.md` | **根说明书**：仓库特殊性（五个子项目共存）、全局约定、提交规范、验证命令 |
+| `scripts/AGENTS.md` | 股市推送线的详细约定：分层、参数语义、坑、排障 |
+| `stereo/AGENTS.md` | 双目视觉学习线：当前未跑通、Lightning 框架结构、依赖 |
+| `czl-web/AGENTS.md` | 网站线：结构、部署、数据约定 |
 | `DEVLOG.md` | 改动流水，按时间倒序 |
 | `.github/workflows/foreign-market-content.yml` | 每天 07:30 定时执行，跑在自建 runner |
 | `bash/run_digest.sh` | 服务器本地 crontab 入口（08:30） |
