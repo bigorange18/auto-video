@@ -1,0 +1,22 @@
+# 海外热点股市推送工作流 —— 运行依赖
+#
+# 安装：
+#   pip install -r requirements.txt
+#
+# Python 要求：3.10+（代码使用 PEP 604 `str | None` 与 `tuple[str, ...]` 语法）
+#
+# 除下面这个包外全部使用标准库。LLM 走 HTTP 调 OpenAI 兼容接口，
+# 不需要 openai / anthropic 等 SDK。
+
+# 微信封面自动生成（Image.new / ImageDraw / ImageFont.truetype / ImageOps.fit）
+# 代码使用 Image.Resampling，该属性自 9.1 起提供，故下限锁 9.1
+Pillow>=9.1
+
+# —— 以下只被科技日报线用到，跑股市推送不需要 ——
+# scripts/wechat_tech_daily_cleaner.py 与 wechat_tech/wechat_tech_daily_cleaner.py
+# 用它解析文章页取正文。
+# beautifulsoup4>=4.9
+# （soupsieve 由 pip 自动解析，无需单独声明）
+
+# 注：stereo/ 学习线依赖 torch / pytorch_lightning / torchvision / numpy，
+#     因框架尚未跑通（models/ 为空壳），暂不固化到本文件。

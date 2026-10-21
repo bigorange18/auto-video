@@ -11,7 +11,8 @@
 
 | 路径 | 是什么 |
 |---|---|
-| `readme.md` | 股市推送工作流的对外说明：数据源、运行命令、推送方式 |
+| `readme.md` | 仓库总入口：定位说明、子项目一览、股市线的对外用法 |
+| `requirements.txt` | 运行依赖，目前只有 `Pillow` |
 | `AGENTS.md` | **根说明书**：仓库特殊性（五个子项目共存）、全局约定、提交规范、验证命令 |
 | `scripts/AGENTS.md` | 股市推送线的详细约定：分层、参数语义、坑、排障 |
 | `stereo/AGENTS.md` | 双目视觉学习线：当前未跑通、Lightning 框架结构、依赖 |
@@ -125,5 +126,7 @@
 - [ ] `gradio/test.py` 空文件，删
 - [ ] `ai-engineer/api/` · `auto-agent/doc/` 空目录，删
 - [ ] `auto-video-v2.zip`（20M）冗余，删
-- [ ] `project/ccstart/main_test` · `p2` 未跟踪的编译产物，加 gitignore
+- [x] `project/ccstart/main_test` · `p2` 编译产物加 gitignore（已加）
+- [ ] `.diag.env` 明文密钥移出仓库并轮换
 - [ ] 视频搬运线决定去留
+- [ ] `stereo/` 依赖待固化（框架跑通后再建独立 requirements）

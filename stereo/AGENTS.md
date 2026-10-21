@@ -34,7 +34,7 @@ pip install torch torchvision pytorch_lightning numpy
 pip install -e .  # 无 pyproject.toml，需手动处理
 ```
 
-根目录没有 requirements.txt。这条线的依赖**不要**和 `scripts/` 的混在一起。
+根 `requirements.txt` **不包含这条线的依赖**，且**不要和 `scripts/` 的混在一起**。本目录无 pyproject.toml / setup.py，需手动安装。
 
 ## 约定
 

@@ -32,23 +32,21 @@
 
 **Python 3.10+**（代码用了 PEP 604 语法）。
 
-**`Pillow` 是必装的**——`scripts/foreign_market_digest_service.py` 顶层直接 import，装不上就跑不起来：
+**只有 `Pillow` 一个必装包**——`scripts/foreign_market_digest_service.py` 顶层直接 import，装不上就跑不起来：
 
 ```bash
-pip install Pillow
+pip install -r requirements.txt
 ```
-
-`beautifulsoup4` 只有 `wechat_tech/` 那条线需要，跑股市推送用不到。
 
 其余全部用标准库，LLM 走 HTTP 调OpenAI 兼容接口，不需要 SDK。
 
-> 仓库根目录没有 requirements.txt，要手动装。
->
-> 注意：仓库里的 `.venv/` 是 Linux 布局（`bin/` 而非 Windows 的 `Scripts/`），在 Windows 上用不了。Windows 下建议另建虚拟环境：
+`beautifulsoup4` 只有 `wechat_tech/` 那条线需要，跑股市推送用不到，requirements.txt 里已注释。
+
+> 仓库里的 `.venv/` 是 Linux 布局（`bin/` 而非 Windows 的 `Scripts/`），在 Windows 上用不了。Windows 下建议另建虚拟环境：
 >
 > ```bash
 > python -m venv .venv-win
-> .venv-win/Scripts/pip install Pillow
+> .venv-win/Scripts/pip install -r requirements.txt
 > ```
 
 密钥只走环境变量，不要写进代码或提交。

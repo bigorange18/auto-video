@@ -22,7 +22,7 @@
 
 - 密钥只走环境变量，**不要写进代码、不要提交**。仓库里的 `.diag.env` 已被 gitignore
 - Python 侧需要 **3.10+**（`scripts/` 和 `stereo/` 都用了 PEP 604 语法）
-- 根目录**没有 requirements.txt**，新增第三方依赖前先确认是否真需要
+- 根 `requirements.txt` 只覆盖股市线（`Pillow`）。新增第三方依赖前先确认是否真需要，且**不要引入重依赖**
 - 改动细节记到 `DEVLOG.md`，不要堆进本文件
 - `readme.md` 是对外说明，`INDEX.md` 是全仓库导航，两者不要和本文件混
 
