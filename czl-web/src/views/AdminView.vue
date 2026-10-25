@@ -1,5 +1,6 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import AdminShell from '../components/admin/AdminShell.vue'
 import AdminArticles from '../components/admin/AdminArticles.vue'
 import AdminTasks from '../components/admin/AdminTasks.vue'
@@ -9,9 +10,15 @@ import AdminContent from '../components/admin/AdminContent.vue'
 
 const session = ref(null)
 const loading = ref(true)
+const route = useRoute()
 const loginForm = reactive({ username: 'admin', password: '' })
 const loginError = ref('')
-const activeTab = ref('overview')
+const requestedTab = String(route.query.tab || '')
+const activeTab = ref(
+  ['overview', 'articles', 'tasks', 'messages', 'traffic', 'content'].includes(requestedTab)
+    ? requestedTab
+    : 'overview',
+)
 
 const stats = ref({ recent: [], messageCount: 0, unreadCount: 0 })
 const taskSummary = ref({

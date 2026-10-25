@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import EntryCard from '../components/EntryCard.vue'
+import { fetchAllArticles } from '../api/articles.js'
 
 const route = useRoute()
 const allArticles = ref([])
@@ -34,10 +35,7 @@ function tagColor(index) {
 onMounted(async () => {
   loading.value = true
   try {
-    const res = await fetch('/api/public/articles?pageSize=50')
-    const d = await res.json()
-    const list = d.data?.articles || d.data || []
-    allArticles.value = Array.isArray(list) ? list : []
+    allArticles.value = await fetchAllArticles()
   } catch {}
   loading.value = false
 })

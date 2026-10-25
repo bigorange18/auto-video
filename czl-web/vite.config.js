@@ -13,8 +13,13 @@ export default defineConfig(({ mode }) => {
     build: {
       rollupOptions: {
         output: {
-          manualChunks: {
-            'markdown-vendor': ['marked', 'highlight.js'],
+          manualChunks(id) {
+            if (
+              id.includes('/node_modules/marked/')
+              || id.includes('/node_modules/highlight.js/')
+            ) {
+              return 'markdown-vendor'
+            }
           },
         },
       },

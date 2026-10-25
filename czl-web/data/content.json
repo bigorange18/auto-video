@@ -24,30 +24,45 @@
   ],
   "projects": [
     {
-      "title": "个人主页重构",
-      "desc": "用 Vue 和 Node 重建现有站点，去掉高风险后端。",
-      "link": "https://www.czl.asia/",
-      "tech": ["Vue 3", "Node.js", "Express", "Vite"],
-      "github": "https://github.com/placeholder/czl-web"
+      "slug": "personal-site",
+      "name": "个人主页重构",
+      "category": "web",
+      "summary": "用 Vue 和 Node 重建现有站点，去掉高风险后端。",
+      "description": "将个人主页整理为可持续维护的内容工作台，覆盖文章、项目、留言和站点管理。",
+      "stack": ["Vue 3", "Node.js", "Express", "Vite"],
+      "repoUrl": "",
+      "demoUrl": "https://www.czl.asia/",
+      "status": "active",
+      "featured": true
     },
     {
-      "title": "内容工作流整理",
-      "desc": "把日志、方法和专题拆分成更清晰的内容层次。",
-      "link": "#contact",
-      "tech": ["Markdown", "JavaScript", "Node.js"],
-      "github": "https://github.com/placeholder/content-workflow"
+      "slug": "content-workflow",
+      "name": "内容工作流整理",
+      "category": "content",
+      "summary": "把日志、方法和专题拆分成更清晰的内容层次。",
+      "description": "统一 Markdown 内容源和发布流程，减少重复维护与格式漂移。",
+      "stack": ["Markdown", "JavaScript", "Node.js"],
+      "repoUrl": "",
+      "demoUrl": "",
+      "status": "planned",
+      "featured": false
     },
     {
-      "title": "部署与维护手册",
-      "desc": "整理上线、校验和回滚流程，减少临时操作。",
-      "link": "#contact",
-      "tech": ["Docker", "Nginx", "Shell", "Git"],
-      "github": "https://github.com/placeholder/deploy-handbook"
+      "slug": "deploy-handbook",
+      "name": "部署与维护手册",
+      "category": "ops",
+      "summary": "整理上线、校验和回滚流程，减少临时操作。",
+      "description": "沉淀部署、健康检查、备份和回滚步骤，让发布流程可重复执行。",
+      "stack": ["Docker", "Nginx", "Shell", "Git"],
+      "repoUrl": "",
+      "demoUrl": "",
+      "status": "planned",
+      "featured": false
     }
   ],
   "contact": {
-    "email": "example@email.com",
-    "wechat": "example_wechat",
-    "github": "github.com/username"
+    "email": "",
+    "wechat": "",
+    "github": ""
   }
 }

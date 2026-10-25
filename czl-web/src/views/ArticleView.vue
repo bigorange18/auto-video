@@ -1,8 +1,11 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import renderMathInElement from 'katex/contrib/auto-render'
+import 'katex/dist/katex.min.css'
 import { renderMarkdown } from '../markdown.js'
 import { useMeta, setArticleMeta } from '../composables/useMeta.js'
+import { fetchAllArticles } from '../api/articles.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -69,9 +72,7 @@ const prevArticle = ref(null)
 const nextArticle = ref(null)
 async function loadAdjacentArticles() {
   try {
-    const res = await fetch('/api/public/articles?pageSize=50')
-    const d = await res.json()
-    const list = d.data?.articles || d.data || []
+    const list = await fetchAllArticles()
     const idx = list.findIndex(a => a.id === route.params.id)
     if (idx > 0) nextArticle.value = list[idx - 1]
     if (idx < list.length - 1) prevArticle.value = list[idx + 1]
@@ -116,7 +117,7 @@ function renderMath() {
     const el = document.querySelector('.article-body')
     if (!el) return
     try {
-      window.renderMathInElement?.(el, {
+      renderMathInElement(el, {
         delimiters: [
           { left: '$$', right: '$$', display: true },
           { left: '$', right: '$', display: false },
@@ -126,17 +127,8 @@ function renderMath() {
     } catch {}
   })
 }
-let _timer = null
 watch(html, () => {
-  clearInterval(_timer)
-  let tries = 0
-  _timer = setInterval(() => {
-    if (window.renderMathInElement || window._katexReady || tries > 20) {
-      clearInterval(_timer)
-      renderMath()
-    }
-    tries++
-  }, 150)
+  renderMath()
 })
 
 /* ---- TOC active slug ---- */
@@ -161,7 +153,6 @@ onMounted(() => {
   window.addEventListener('scroll', onScrollProgress, { passive: true })
 })
 onUnmounted(() => {
-  clearInterval(_timer)
   window.removeEventListener('scroll', onScrollProgress)
 })
 </script>

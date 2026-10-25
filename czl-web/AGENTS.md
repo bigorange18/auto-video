@@ -2,6 +2,12 @@
 
 Vue 3 + Vite + Express 的个人主页与内容管理后台。**这条线与仓库其他部分无关**，是独立的 Node 项目。
 
+## 任务 API（先读）
+
+任务公开读取、集成写入、认证、字段和错误码统一见
+[`docs/API.md`](docs/API.md)。修改 `server/index.js` 的任务路由或
+`server/store.js` 的任务读写逻辑时，必须同步更新该文档。
+
 ## 结构
 
 ```
@@ -15,6 +21,7 @@ server/
   store.js         JSON 数据读写（393 行）
 content/posts/     博客源文件（frontmatter + markdown）
 data/              内容数据 JSON（articles / messages / tasks / stats / admin）
+docs/API.md        任务读取与写入接口权威说明
 ```
 
 ## 命令
@@ -37,10 +44,14 @@ bash bash/setup-nginx.sh    # 反代 + HTTPS（需要 root）
 HOST / PORT           监听地址与端口
 SITE_URL              站点对外地址
 SESSION_SECRET        会话密钥，线上必改
+TASKS_API_TOKEN       任务集成写入令牌，仅服务端环境变量保存
+ALLOWED_ORIGINS       额外允许的管理接口来源，逗号分隔
 DEV_API_TARGET        开发时前端代理的后端地址
 ```
 
 `.env` 不入库。
+
+管理接口使用签名 Cookie 会话和同源校验；不要改回内存 Session Store。
 
 ## 约定
 

@@ -1,8 +1,10 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import { normalizeProjects } from '../../../shared/projectSchema.js'
 
 // ── Data ─────────────────────────────────────────────────────────────────────
 const tasks = ref([])
+const projects = ref([])
 const loading = ref(true)
 const filters = reactive({ keyword: '', status: 'all' })
 
@@ -11,7 +13,8 @@ const modal = reactive({ open: false, editId: null })
 const saving = ref(false)
 const form = reactive({
   title: '',
-  project: '',
+  projectSlug: '',
+  visibility: 'private',
   priority: 'medium',
   status: 'todo',
   dueDate: '',
@@ -34,7 +37,15 @@ async function fetchTasks() {
   }
 }
 
-onMounted(fetchTasks)
+async function fetchProjects() {
+  const res = await fetch('/api/admin/content')
+  const json = await res.json()
+  if (json.success) {
+    projects.value = normalizeProjects(json.data.projects)
+  }
+}
+
+onMounted(() => Promise.all([fetchTasks(), fetchProjects()]))
 
 // ── Computed ──────────────────────────────────────────────────────────────────
 const filteredTasks = computed(() => {
@@ -42,7 +53,7 @@ const filteredTasks = computed(() => {
   return tasks.value.filter((t) => {
     const statusOk = filters.status === 'all' || t.status === filters.status
     const kwOk = kw
-      ? [t.title, t.project, ...(t.tags || [])].join(' ').toLowerCase().includes(kw)
+      ? [t.title, projectName(t.projectSlug), ...(t.tags || [])].join(' ').toLowerCase().includes(kw)
       : true
     return statusOk && kwOk
   })
@@ -61,6 +72,10 @@ const statusPills = [
   { value: 'in_progress', label: '进行中' },
   { value: 'done', label: '已完成' },
 ]
+const projectOptions = computed(() => projects.value.map((project) => ({
+  value: project.slug,
+  label: project.name,
+})))
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function toStatusLabel(s) {
@@ -71,6 +86,9 @@ function toPriorityLabel(p) {
 }
 function priorityColor(p) {
   return { high: '#ef4444', medium: '#f97316', low: '#22c55e' }[p] ?? '#94a3b8'
+}
+function projectName(slug) {
+  return projects.value.find((project) => project.slug === slug)?.name || slug || ''
 }
 function isOverdue(task) {
   if (!task.dueDate || task.status === 'done') return false
@@ -84,7 +102,7 @@ function progressPct(n) {
 // ── Modal ─────────────────────────────────────────────────────────────────────
 function openCreate() {
   Object.assign(form, {
-    title: '', project: '', priority: 'medium',
+    title: '', projectSlug: '', visibility: 'private', priority: 'medium',
     status: 'todo', dueDate: '', tags: '', notes: '',
   })
   modal.editId = null
@@ -94,7 +112,8 @@ function openCreate() {
 function openEdit(task) {
   Object.assign(form, {
     title: task.title,
-    project: task.project || '',
+    projectSlug: task.projectSlug || '',
+    visibility: task.visibility || 'private',
     priority: task.priority || 'medium',
     status: task.status || 'todo',
     dueDate: task.dueDate || '',
@@ -116,7 +135,8 @@ async function saveTask() {
   try {
     const payload = {
       title: form.title.trim(),
-      project: form.project.trim(),
+      projectSlug: form.projectSlug,
+      visibility: form.visibility,
       priority: form.priority,
       status: form.status,
       dueDate: form.dueDate || null,
@@ -229,7 +249,7 @@ async function confirmDelete(id) {
           <div class="at-card-top">
             <div class="at-card-title-row">
               <strong class="at-card-title">{{ task.title }}</strong>
-              <span class="at-card-project">{{ task.project || '未分配项目' }}</span>
+              <span class="at-card-project">{{ projectName(task.projectSlug) || '未分配项目' }}</span>
             </div>
             <div class="at-card-right">
               <span
@@ -250,6 +270,7 @@ async function confirmDelete(id) {
             <span class="at-priority-badge" :style="{ color: priorityColor(task.priority) }">
               {{ toPriorityLabel(task.priority) }}优先级
             </span>
+            <span v-if="task.visibility === 'public'" class="at-tag at-tag--public">公开发布</span>
             <span
               v-for="tag in (task.tags || [])"
               :key="tag"
@@ -289,7 +310,12 @@ async function confirmDelete(id) {
 
           <div class="at-modal-field">
             <label class="at-label">项目</label>
-            <input v-model="form.project" type="text" class="at-input" placeholder="所属项目（可选）" />
+            <select v-model="form.projectSlug" class="at-input">
+              <option value="">未关联项目</option>
+              <option v-for="project in projectOptions" :key="project.value" :value="project.value">
+                {{ project.label }}
+              </option>
+            </select>
           </div>
 
           <div class="at-modal-field">
@@ -316,6 +342,20 @@ async function confirmDelete(id) {
                 class="at-seg-btn"
                 :class="{ active: form.status === opt.v }"
                 @click="form.status = opt.v"
+              >{{ opt.l }}</button>
+            </div>
+          </div>
+
+          <div class="at-modal-field">
+            <label class="at-label">可见性</label>
+            <div class="at-seg-group">
+              <button
+                v-for="opt in [{ v: 'private', l: '仅后台' }, { v: 'public', l: '公开展示' }]"
+                :key="opt.v"
+                type="button"
+                class="at-seg-btn"
+                :class="{ active: form.visibility === opt.v }"
+                @click="form.visibility = opt.v"
               >{{ opt.l }}</button>
             </div>
           </div>
@@ -453,6 +493,10 @@ async function confirmDelete(id) {
 .at-tag {
   padding: 2px 8px; border-radius: 999px; font-size: .74rem;
   background: rgba(139,92,246,.08); color: var(--c5);
+}
+.at-tag--public {
+  background: rgba(16,185,129,.09);
+  color: var(--c3);
 }
 
 /* ── Actions ── */

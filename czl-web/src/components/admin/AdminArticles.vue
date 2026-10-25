@@ -4,6 +4,7 @@ import { renderMarkdown } from '../../markdown.js'
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const articles = ref([])
+const articleWarnings = ref([])
 const loading = ref(true)
 const view = ref('list') // 'list' | 'editor'
 
@@ -11,6 +12,17 @@ const view = ref('list') // 'list' | 'editor'
 const uploadInput = ref(null)
 const uploading = ref(false)
 const uploadNotice = ref('')
+
+async function uploadMarkdown(file, overwrite = false) {
+  return fetch(
+    `/api/admin/articles/upload?filename=${encodeURIComponent(file.name)}&overwrite=${overwrite}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: await file.text(),
+    },
+  )
+}
 
 async function onUploadChange(e) {
   const file = e.target.files?.[0]
@@ -22,13 +34,17 @@ async function onUploadChange(e) {
   uploading.value = true
   uploadNotice.value = ''
   try {
-    const text = await file.text()
-    const res = await fetch(`/api/admin/articles/upload?filename=${encodeURIComponent(file.name)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: text,
-    })
-    const json = await res.json()
+    let res = await uploadMarkdown(file)
+    let json = await res.json()
+    if (res.status === 409) {
+      const confirmed = window.confirm(json.message || '同名文章已存在，是否覆盖？')
+      if (!confirmed) {
+        uploadNotice.value = '已取消覆盖'
+        return
+      }
+      res = await uploadMarkdown(file, true)
+      json = await res.json()
+    }
     if (json.success) {
       uploadNotice.value = `✓ ${file.name} 上传成功`
       await fetchArticles()
@@ -107,7 +123,15 @@ async function fetchArticles() {
   }
 }
 
-onMounted(fetchArticles)
+async function fetchWarnings() {
+  try {
+    const res = await fetch('/api/admin/articles/warnings')
+    const json = await res.json()
+    if (json.success) articleWarnings.value = json.data
+  } catch {}
+}
+
+onMounted(() => Promise.all([fetchArticles(), fetchWarnings()]))
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function wordCount(content) {
@@ -281,6 +305,13 @@ const toolbarItems = [
           </label>
           <button type="button" class="aa-new-btn" @click="openCreate">＋ 新建文章</button>
         </div>
+      </div>
+
+      <div v-if="articleWarnings.length" class="aa-warning-banner">
+        <strong>有 {{ articleWarnings.length }} 篇文章无法解析，已暂时跳过：</strong>
+        <span v-for="warning in articleWarnings" :key="warning.file">
+          {{ warning.file }}：{{ warning.message }}
+        </span>
       </div>
 
       <div v-if="loading" class="aa-empty">加载中…</div>
@@ -497,6 +528,17 @@ const toolbarItems = [
 .aa-upload-btn:hover { background: var(--c5, #6366f1); color: #fff; border-color: transparent; }
 .aa-upload-btn.disabled { opacity: 0.6; pointer-events: none; }
 .aa-upload-notice { font-size: 0.78rem; color: var(--c2, #22c55e); }
+.aa-warning-banner {
+  display: grid;
+  gap: 5px;
+  padding: 11px 14px;
+  border: 1px solid rgba(239, 68, 68, .25);
+  border-radius: 10px;
+  background: rgba(239, 68, 68, .06);
+  color: var(--soft);
+  font-size: .8rem;
+}
+.aa-warning-banner strong { color: #dc2626; }
 
 /* cover image upload */
 .cover-input-row {

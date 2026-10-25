@@ -83,6 +83,7 @@
 | 路径 | 是什么 |
 |---|---|
 | `czl-web/README.md` | Vue 3 + Vite + Express 个人站说明 |
+| `czl-web/docs/API.md` | **任务公开读取与集成写入接口的权威说明** |
 | `czl-web/content/posts/` | 博客文章源文件（frontmatter + markdown） |
 | `czl-web/server/` | Express 后端，`store.js` 管 JSON 数据读写 |
 | `czl-web/src/components/admin/` | 管理后台（文章 776 行 / Shell 578 / 内容 565 / 任务 541 / 消息 363 / 流量 346） |

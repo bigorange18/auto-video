@@ -3,6 +3,8 @@
  * Works in a pure SPA (no SSR). Creates tags if they don't exist yet.
  */
 export function useMeta({ title, description, image = '', url = '', type = 'website' }) {
+  document.querySelectorAll('meta[property^="article:"]').forEach((el) => el.remove())
+
   // --- helpers ---
   function setMeta(selector, attr, value) {
     let el = document.querySelector(selector)

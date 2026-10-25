@@ -16,7 +16,9 @@ async function ensurePostsDir() {
 // Short-lived in-memory cache to avoid re-reading disk on every request
 let _postsCache = null
 let _postsCacheAt = 0
+let _postsErrors = []
 const POSTS_CACHE_TTL = 3000 // 3 seconds
+const writeQueues = new Map()
 
 function invalidatePostsCache() {
   _postsCache = null
@@ -48,10 +50,12 @@ async function readAllPosts(force = false) {
   try {
     files = await fs.readdir(postsDir)
   } catch {
+    _postsErrors = []
     return []
   }
   const mdFiles = files.filter((f) => f.endsWith('.md'))
   const articles = []
+  const errors = []
   for (const file of mdFiles) {
     try {
       const raw = await fs.readFile(path.join(postsDir, file), 'utf8')
@@ -76,31 +80,64 @@ async function readAllPosts(force = false) {
         updatedAt: d.updatedAt ? new Date(d.updatedAt).toISOString() : new Date().toISOString(),
         content: parsed.content.trim(),
       })
-    } catch {
-      // skip malformed files silently
+    } catch (error) {
+      errors.push({
+        file,
+        message: error instanceof Error ? error.message : String(error),
+      })
     }
   }
   articles.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
   _postsCache = articles
   _postsCacheAt = now
+  _postsErrors = errors
   return articles
+}
+
+export async function getArticleWarnings() {
+  await readAllPosts(true)
+  return [..._postsErrors]
 }
 
 function resolveFile(name) {
   return path.join(dataDir, name)
 }
 
+function withWriteQueue(key, task) {
+  const previous = writeQueues.get(key) || Promise.resolve()
+  const pending = previous.catch(() => undefined).then(task)
+  writeQueues.set(key, pending)
+
+  return pending.finally(() => {
+    if (writeQueues.get(key) === pending) {
+      writeQueues.delete(key)
+    }
+  })
+}
+
 async function readJson(name, fallback) {
   try {
     const raw = await fs.readFile(resolveFile(name), 'utf8')
-    return JSON.parse(raw)
+    return JSON.parse(raw) ?? fallback
   } catch {
     return fallback
   }
 }
 
 async function writeJson(name, value) {
-  await fs.writeFile(resolveFile(name), JSON.stringify(value, null, 2), 'utf8')
+  await fs.mkdir(dataDir, { recursive: true })
+  const target = resolveFile(name)
+  const temp = path.join(
+    dataDir,
+    `.${path.basename(name)}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`,
+  )
+  await fs.writeFile(temp, JSON.stringify(value, null, 2), 'utf8')
+  try {
+    await fs.rename(temp, target)
+  } catch (error) {
+    await fs.rm(temp, { force: true })
+    throw error
+  }
 }
 
 function makeId(prefix) {
@@ -120,8 +157,10 @@ export async function getContent() {
 }
 
 export async function saveContent(nextContent) {
-  await writeJson('content.json', nextContent)
-  return nextContent
+  return withWriteQueue('content.json', async () => {
+    await writeJson('content.json', nextContent)
+    return nextContent
+  })
 }
 
 export async function getMessages() {
@@ -130,32 +169,38 @@ export async function getMessages() {
 }
 
 export async function addMessage(payload) {
-  const messages = await readJson('messages.json', [])
-  const nextMessage = {
-    id: makeId('msg'),
-    name: payload.name,
-    email: payload.email,
-    body: payload.body,
-    read: false,
-    createdAt: new Date().toISOString(),
-  }
-  messages.push(nextMessage)
-  await writeJson('messages.json', messages)
-  return nextMessage
+  return withWriteQueue('messages.json', async () => {
+    const messages = await readJson('messages.json', [])
+    const nextMessage = {
+      id: makeId('msg'),
+      name: payload.name,
+      email: payload.email,
+      body: payload.body,
+      read: false,
+      createdAt: new Date().toISOString(),
+    }
+    messages.push(nextMessage)
+    await writeJson('messages.json', messages)
+    return nextMessage
+  })
 }
 
 export async function markMessageRead(id, read) {
-  const messages = await readJson('messages.json', [])
-  const nextMessages = messages.map((message) =>
-    message.id === id ? { ...message, read } : message,
-  )
-  await writeJson('messages.json', nextMessages)
+  return withWriteQueue('messages.json', async () => {
+    const messages = await readJson('messages.json', [])
+    const nextMessages = messages.map((message) =>
+      message.id === id ? { ...message, read } : message,
+    )
+    await writeJson('messages.json', nextMessages)
+  })
 }
 
 export async function deleteMessage(id) {
-  const messages = await readJson('messages.json', [])
-  const nextMessages = messages.filter((message) => message.id !== id)
-  await writeJson('messages.json', nextMessages)
+  return withWriteQueue('messages.json', async () => {
+    const messages = await readJson('messages.json', [])
+    const nextMessages = messages.filter((message) => message.id !== id)
+    await writeJson('messages.json', nextMessages)
+  })
 }
 
 export async function getAdmin() {
@@ -167,70 +212,145 @@ export async function getStats() {
 }
 
 export async function trackVisit(ip, userAgent) {
-  const stats = await readJson('stats.json', {})
-  const today = getToday()
-  const visitorKey = hashVisitor(`${ip}:${userAgent}`)
-  const current = stats[today] || { pv: 0, uv: [] }
-  current.pv += 1
-  if (!current.uv.includes(visitorKey)) {
-    current.uv.push(visitorKey)
-  }
-  stats[today] = current
-  await writeJson('stats.json', stats)
-  return stats
+  return withWriteQueue('stats.json', async () => {
+    const stats = await readJson('stats.json', {})
+    const today = getToday()
+    const visitorKey = hashVisitor(`${ip}:${userAgent}`)
+    const current = stats[today] || { pv: 0, uv: [] }
+    current.pv += 1
+    if (!current.uv.includes(visitorKey)) {
+      current.uv.push(visitorKey)
+    }
+    stats[today] = current
+    await writeJson('stats.json', stats)
+    return stats
+  })
 }
 
 function normalizeTask(raw = {}) {
   const status = ['todo', 'in_progress', 'done'].includes(raw.status) ? raw.status : 'todo'
   const priority = ['low', 'medium', 'high'].includes(raw.priority) ? raw.priority : 'medium'
+  const visibility = ['private', 'public'].includes(raw.visibility) ? raw.visibility : 'private'
   const tags = Array.isArray(raw.tags)
     ? raw.tags.map((item) => String(item).trim()).filter(Boolean).slice(0, 8)
     : []
   return {
     id: raw.id || makeId('task'),
     title: String(raw.title || '').trim(),
-    project: String(raw.project || '').trim(),
+    externalId: String(raw.externalId || '').trim(),
+    projectSlug: String(raw.projectSlug || '').trim(),
+    visibility,
     priority,
     status,
     dueDate: String(raw.dueDate || '').trim(),
     tags,
     notes: String(raw.notes || '').trim(),
     createdAt: raw.createdAt || new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    updatedAt: raw.updatedAt || new Date().toISOString(),
   }
 }
 
 export async function getTasks() {
   const tasks = await readJson('tasks.json', [])
-  return [...tasks].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+  return tasks
+    .map((task) => normalizeTask(task))
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+}
+
+export function toPublicTask(task) {
+  const normalized = normalizeTask(task)
+  return {
+    id: normalized.id,
+    title: normalized.title,
+    projectSlug: normalized.projectSlug,
+    priority: normalized.priority,
+    status: normalized.status,
+    dueDate: normalized.dueDate,
+    tags: normalized.tags,
+    createdAt: normalized.createdAt,
+    updatedAt: normalized.updatedAt,
+  }
+}
+
+export function filterPublicTasks(tasks, { projectSlug = '', status = 'all' } = {}) {
+  return tasks
+    .map((task) => normalizeTask(task))
+    .filter((task) => task.visibility === 'public')
+    .filter((task) => !projectSlug || task.projectSlug === projectSlug)
+    .filter((task) => status === 'all' || task.status === status)
+    .map(toPublicTask)
+}
+
+export async function getPublicTasks(filters = {}) {
+  return filterPublicTasks(await getTasks(), filters)
 }
 
 export async function addTask(payload) {
-  const tasks = await readJson('tasks.json', [])
-  const nextTask = normalizeTask(payload)
-  tasks.push(nextTask)
-  await writeJson('tasks.json', tasks)
-  return nextTask
+  return withWriteQueue('tasks.json', async () => {
+    const tasks = await readJson('tasks.json', [])
+    const nextTask = normalizeTask(payload)
+    tasks.push(nextTask)
+    await writeJson('tasks.json', tasks)
+    return nextTask
+  })
+}
+
+export function mergeTask(existing, payload = {}, now = new Date().toISOString()) {
+  return normalizeTask({
+    ...existing,
+    ...payload,
+    id: existing?.id || makeId('task'),
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+  })
+}
+
+export async function upsertTask(payload = {}) {
+  return withWriteQueue('tasks.json', async () => {
+    const tasks = await readJson('tasks.json', [])
+    const externalId = String(payload.externalId || '').trim()
+    const index = tasks.findIndex((task) => task.externalId === externalId)
+    const existing = index >= 0 ? tasks[index] : null
+    const task = mergeTask(existing, payload)
+
+    if (index >= 0) {
+      tasks[index] = task
+    } else {
+      tasks.push(task)
+    }
+    await writeJson('tasks.json', tasks)
+    return { task, created: !existing }
+  })
 }
 
 export async function updateTask(id, payload = {}) {
-  const tasks = await readJson('tasks.json', [])
-  let updated = null
-  const nextTasks = tasks.map((task) => {
-    if (task.id !== id) {
-      return task
-    }
-    updated = normalizeTask({ ...task, ...payload, id: task.id, createdAt: task.createdAt })
+  return withWriteQueue('tasks.json', async () => {
+    const tasks = await readJson('tasks.json', [])
+    let updated = null
+    const nextTasks = tasks.map((task) => {
+      if (task.id !== id) {
+        return task
+      }
+      updated = normalizeTask({
+        ...task,
+        ...payload,
+        id: task.id,
+        createdAt: task.createdAt,
+        updatedAt: new Date().toISOString(),
+      })
+      return updated
+    })
+    await writeJson('tasks.json', nextTasks)
     return updated
   })
-  await writeJson('tasks.json', nextTasks)
-  return updated
 }
 
 export async function deleteTask(id) {
-  const tasks = await readJson('tasks.json', [])
-  const nextTasks = tasks.filter((task) => task.id !== id)
-  await writeJson('tasks.json', nextTasks)
+  return withWriteQueue('tasks.json', async () => {
+    const tasks = await readJson('tasks.json', [])
+    const nextTasks = tasks.filter((task) => task.id !== id)
+    await writeJson('tasks.json', nextTasks)
+  })
 }
 
 const chineseTypeMap = { '博客': 'blog', '生活': 'life', '摄影': 'photo' }
@@ -243,71 +363,77 @@ export async function getAllArticlesAdmin() {
 export async function createArticle(data = {}) {
   if (!String(data.title || '').trim()) throw new Error('文章标题不能为空')
   if (!String(data.content || '').trim()) throw new Error('文章内容不能为空')
-  await ensurePostsDir()
-  const id = makeId('art')
-  const now = new Date().toISOString()
-  const mapped = chineseTypeMap[data.type] || data.type
-  const type = allowedEnglishTypes.includes(mapped) ? mapped : 'blog'
-  const tags = Array.isArray(data.tags)
-    ? data.tags.map((t) => String(t).trim()).filter(Boolean)
-    : typeof data.tags === 'string'
-      ? data.tags.split(',').map((t) => t.trim()).filter(Boolean)
-      : []
-  const article = {
-    id,
-    title: String(data.title).trim(),
-    summary: String(data.summary || '').trim(),
-    type,
-    tags,
-    coverImage: String(data.coverImage || '').trim(),
-    published: data.published !== false,
-    createdAt: now,
-    updatedAt: now,
-    content: String(data.content).trim(),
-  }
-  const md = articleToMd(article)
-  await fs.writeFile(path.join(postsDir, idToFilename(id)), md, 'utf8')
-  invalidatePostsCache()
-  return article
+  return withWriteQueue('articles', async () => {
+    await ensurePostsDir()
+    const id = makeId('art')
+    const now = new Date().toISOString()
+    const mapped = chineseTypeMap[data.type] || data.type
+    const type = allowedEnglishTypes.includes(mapped) ? mapped : 'blog'
+    const tags = Array.isArray(data.tags)
+      ? data.tags.map((t) => String(t).trim()).filter(Boolean)
+      : typeof data.tags === 'string'
+        ? data.tags.split(',').map((t) => t.trim()).filter(Boolean)
+        : []
+    const article = {
+      id,
+      title: String(data.title).trim(),
+      summary: String(data.summary || '').trim(),
+      type,
+      tags,
+      coverImage: String(data.coverImage || '').trim(),
+      published: data.published !== false,
+      createdAt: now,
+      updatedAt: now,
+      content: String(data.content).trim(),
+    }
+    const md = articleToMd(article)
+    await fs.writeFile(path.join(postsDir, idToFilename(id)), md, 'utf8')
+    invalidatePostsCache()
+    return article
+  })
 }
 
 export async function updateArticle(id, data = {}) {
-  const all = await readAllPosts(true)
-  const existing = all.find((a) => a.id === id)
-  if (!existing) return null
-  const mapped = chineseTypeMap[data.type] || data.type
-  const type = allowedEnglishTypes.includes(mapped) ? mapped : existing.type
-  const tags = data.tags !== undefined
-    ? (Array.isArray(data.tags)
-        ? data.tags.map((t) => String(t).trim()).filter(Boolean)
-        : String(data.tags).split(',').map((t) => t.trim()).filter(Boolean))
-    : existing.tags
-  const updated = {
-    ...existing,
-    title: data.title !== undefined ? String(data.title).trim() : existing.title,
-    summary: data.summary !== undefined ? String(data.summary).trim() : existing.summary,
-    type,
-    tags,
-    coverImage: data.coverImage !== undefined ? String(data.coverImage).trim() : existing.coverImage,
-    published: data.published !== undefined ? (data.published !== false && data.published !== 'false') : existing.published,
-    content: data.content !== undefined ? String(data.content).trim() : existing.content,
-    updatedAt: new Date().toISOString(),
-  }
-  const md = articleToMd(updated)
-  await fs.writeFile(path.join(postsDir, idToFilename(id)), md, 'utf8')
-  invalidatePostsCache()
-  return updated
+  return withWriteQueue('articles', async () => {
+    const all = await readAllPosts(true)
+    const existing = all.find((a) => a.id === id)
+    if (!existing) return null
+    const mapped = chineseTypeMap[data.type] || data.type
+    const type = allowedEnglishTypes.includes(mapped) ? mapped : existing.type
+    const tags = data.tags !== undefined
+      ? (Array.isArray(data.tags)
+          ? data.tags.map((t) => String(t).trim()).filter(Boolean)
+          : String(data.tags).split(',').map((t) => t.trim()).filter(Boolean))
+      : existing.tags
+    const updated = {
+      ...existing,
+      title: data.title !== undefined ? String(data.title).trim() : existing.title,
+      summary: data.summary !== undefined ? String(data.summary).trim() : existing.summary,
+      type,
+      tags,
+      coverImage: data.coverImage !== undefined ? String(data.coverImage).trim() : existing.coverImage,
+      published: data.published !== undefined ? (data.published !== false && data.published !== 'false') : existing.published,
+      content: data.content !== undefined ? String(data.content).trim() : existing.content,
+      updatedAt: new Date().toISOString(),
+    }
+    const md = articleToMd(updated)
+    await fs.writeFile(path.join(postsDir, idToFilename(id)), md, 'utf8')
+    invalidatePostsCache()
+    return updated
+  })
 }
 
 export async function deleteArticle(id) {
-  const filePath = path.join(postsDir, idToFilename(id))
-  try {
-    await fs.unlink(filePath)
-    invalidatePostsCache()
-    return true
-  } catch {
-    return false
-  }
+  return withWriteQueue('articles', async () => {
+    const filePath = path.join(postsDir, idToFilename(id))
+    try {
+      await fs.unlink(filePath)
+      invalidatePostsCache()
+      return true
+    } catch {
+      return false
+    }
+  })
 }
 
 export async function getArticles() {
@@ -321,14 +447,24 @@ export async function getArticleById(id) {
 }
 
 // Save a raw .md file directly (used by file upload endpoint)
-export async function saveArticleFile(filename, content) {
-  await ensurePostsDir()
-  // Sanitize filename
-  const safe = path.basename(filename).replace(/[^a-zA-Z0-9_.-]/g, '_')
-  const dest = path.join(postsDir, safe.endsWith('.md') ? safe : `${safe}.md`)
-  await fs.writeFile(dest, content, 'utf8')
-  invalidatePostsCache()
-  return filenameToId(path.basename(dest))
+export async function saveArticleFile(filename, content, { overwrite = false } = {}) {
+  return withWriteQueue('articles', async () => {
+    await ensurePostsDir()
+    // Sanitize filename
+    const safe = path.basename(filename).replace(/[^a-zA-Z0-9_.-]/g, '_')
+    const dest = path.join(postsDir, safe.endsWith('.md') ? safe : `${safe}.md`)
+    if (!overwrite) {
+      try {
+        await fs.access(dest)
+        return { conflict: true, id: filenameToId(path.basename(dest)) }
+      } catch (error) {
+        if (error?.code !== 'ENOENT') throw error
+      }
+    }
+    await fs.writeFile(dest, content, 'utf8')
+    invalidatePostsCache()
+    return { conflict: false, id: filenameToId(path.basename(dest)) }
+  })
 }
 
 export async function getPublicStats() {

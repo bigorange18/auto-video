@@ -1,5 +1,27 @@
 import { marked } from 'marked'
-import hljs from 'highlight.js'
+import hljs from 'highlight.js/lib/core'
+import DOMPurify from 'dompurify'
+import bash from 'highlight.js/lib/languages/bash'
+import cpp from 'highlight.js/lib/languages/cpp'
+import css from 'highlight.js/lib/languages/css'
+import javascript from 'highlight.js/lib/languages/javascript'
+import json from 'highlight.js/lib/languages/json'
+import python from 'highlight.js/lib/languages/python'
+import typescript from 'highlight.js/lib/languages/typescript'
+import xml from 'highlight.js/lib/languages/xml'
+import 'highlight.js/styles/github.css'
+
+hljs.registerLanguage('bash', bash)
+hljs.registerLanguage('cpp', cpp)
+hljs.registerLanguage('css', css)
+hljs.registerLanguage('javascript', javascript)
+hljs.registerLanguage('js', javascript)
+hljs.registerLanguage('json', json)
+hljs.registerLanguage('python', python)
+hljs.registerLanguage('typescript', typescript)
+hljs.registerLanguage('ts', typescript)
+hljs.registerLanguage('xml', xml)
+hljs.registerLanguage('html', xml)
 
 marked.setOptions({
   highlight(code, lang) {
@@ -52,5 +74,7 @@ export function renderMarkdown(content) {
     return `<div class="math-block">$$${formula}$$</div>`
   })
 
-  return html
+  return DOMPurify.sanitize(html, {
+    USE_PROFILES: { html: true },
+  })
 }

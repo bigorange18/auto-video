@@ -2,7 +2,8 @@
   {
     "id": "task_demo_01",
     "title": "重构首页线框布局",
-    "project": "czl-web",
+    "projectSlug": "personal-site",
+    "visibility": "private",
     "priority": "high",
     "status": "done",
     "dueDate": "2026-05-28",
@@ -17,7 +18,8 @@
   {
     "id": "task_demo_02",
     "title": "接入任务管理 API",
-    "project": "czl-web",
+    "projectSlug": "personal-site",
+    "visibility": "private",
     "priority": "high",
     "status": "todo",
     "dueDate": "2026-05-29",
@@ -32,7 +34,8 @@
   {
     "id": "task_demo_03",
     "title": "整理部署说明",
-    "project": "ops",
+    "projectSlug": "deploy-handbook",
+    "visibility": "private",
     "priority": "medium",
     "status": "done",
     "dueDate": "2026-05-24",

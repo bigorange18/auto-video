@@ -12,7 +12,7 @@
 |---|---|---|
 | `scripts/` | 股市推送工作流，唯一有 CI 定时任务的 | [scripts/AGENTS.md](scripts/AGENTS.md) |
 | `stereo/` | 双目立体匹配学习代码（PyTorch） | [stereo/AGENTS.md](stereo/AGENTS.md) |
-| `czl-web/` | Vue 3 + Express 个人站 | [czl-web/AGENTS.md](czl-web/AGENTS.md) |
+| `czl-web/` | Vue 3 + Express 个人站 | [czl-web/AGENTS.md](czl-web/AGENTS.md) · [任务 API](czl-web/docs/API.md) |
 | `wechat_tech/` | 科技日报自动化 | 尚无独立文件 |
 | `project/ccstart/` | C++ 刷题练习 | 尚无独立文件 |
 

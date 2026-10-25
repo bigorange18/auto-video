@@ -21,6 +21,16 @@ router.afterEach(() => {
   window.scrollTo({ top: 0, behavior: 'instant' })
 })
 
+router.afterEach((to) => {
+  if (to.path.startsWith('/admin') || to.name === 'not-found') return
+  fetch('/api/public/visit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+    keepalive: true,
+  }).catch(() => {})
+})
+
 const SITE = '大橘'
 router.afterEach((to) => {
   const titles = { home: SITE, admin: `管理后台 - ${SITE}`, about: `关于 - ${SITE}`, projects: `项目 - ${SITE}` }

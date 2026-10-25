@@ -2,6 +2,7 @@
 import { onMounted, reactive, ref, computed, watch } from 'vue'
 import EntryCard from '../components/EntryCard.vue'
 import { useMeta } from '../composables/useMeta.js'
+import { fetchAllArticles } from '../api/articles.js'
 
 const activeType = ref('all')
 const searchText = ref('')
@@ -38,17 +39,17 @@ const typeCounts = computed(() => ({
 onMounted(async () => {
   loading.value = true
   try {
-    const [contentRes, articlesRes, statsRes] = await Promise.all([
+    const [contentRes, statsRes, allArticles] = await Promise.all([
       fetch('/api/public/content'),
-      fetch('/api/public/articles'),
       fetch('/api/public/stats'),
+      fetchAllArticles(),
     ])
-    const [c, a, s] = await Promise.all([contentRes.json(), articlesRes.json(), statsRes.json()])
+    const [c, s] = await Promise.all([contentRes.json(), statsRes.json()])
     if (c.success) Object.assign(content, c.data)
-    if (a.success) {
-      const list = Array.isArray(a.data) ? a.data : (a.data.articles || [])
-      articles.value = list.map(x => ({ ...x, date: x.createdAt?.slice(0, 10) || '' }))
-    }
+    articles.value = allArticles.map(x => ({
+      ...x,
+      date: x.createdAt?.slice(0, 10) || '',
+    }))
     if (s.success) stats.value = s.data
     useMeta({
       title: `${content.site?.title || '大橘'} — ${content.intro?.headline || '把个人主页改造成持续更新的工作前台。'}`,

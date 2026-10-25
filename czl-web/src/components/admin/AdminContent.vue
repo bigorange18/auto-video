@@ -1,7 +1,14 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
+import {
+  normalizeProjects,
+  PROJECT_CATEGORIES,
+  PROJECT_STATUSES,
+} from '../../../shared/projectSchema.js'
 
 const CHIP_COLORS = ['--c1', '--c2', '--c3', '--c4', '--c5', '--c6', '--c7', '--c8']
+const route = useRoute()
 
 const activeSection = ref('site')
 const saving = ref(false)
@@ -26,29 +33,46 @@ const skillsText = computed({
 
 // Projects: each item in editing form has tags as comma string
 const projectForms = ref([])
+const highlightedProject = ref('')
+const statusLabels = {
+  active: '进行中',
+  maintained: '持续维护',
+  planned: '计划中',
+  archived: '已归档',
+}
+const categoryLabels = {
+  web: 'Web',
+  ai: 'AI',
+  content: '内容',
+  ops: '运维',
+  learning: '学习',
+  other: '其他',
+}
 
 function projectsToForms(projects) {
-  return (projects || []).map((p) => ({
-    name: p.name ?? '',
-    description: p.description ?? '',
-    url: p.url ?? '',
-    github: p.github ?? '',
-    tags: Array.isArray(p.tags) ? p.tags.join(', ') : (p.tags ?? ''),
+  return normalizeProjects(projects).map((p) => ({
+    ...p,
+    stackText: p.stack.join(', '),
   }))
 }
 
 function formsToProjects(forms) {
-  return forms.map((f) => ({
-    name: f.name,
-    description: f.description,
-    url: f.url,
-    github: f.github,
-    tags: f.tags.split(',').map((t) => t.trim()).filter(Boolean),
-  }))
+  return normalizeProjects(forms.map((f) => ({ ...f, stack: f.stackText })))
 }
 
 function addProject() {
-  projectForms.value.push({ name: '', description: '', url: '', github: '', tags: '' })
+  projectForms.value.push({
+    slug: `project-${projectForms.value.length + 1}`,
+    name: '',
+    category: 'web',
+    summary: '',
+    description: '',
+    stackText: '',
+    repoUrl: '',
+    demoUrl: '',
+    status: 'active',
+    featured: false,
+  })
 }
 
 function removeProject(i) {
@@ -71,6 +95,17 @@ async function fetchContent() {
     form.skills = Array.isArray(data.skills) ? [...data.skills] : []
     form.contact = { ...form.contact, ...(data.contact ?? {}) }
     projectForms.value = projectsToForms(data.projects ?? [])
+    const projectSlug = String(route.query.project || '')
+    if (projectSlug && projectForms.value.some((project) => project.slug === projectSlug)) {
+      activeSection.value = 'projects'
+      highlightedProject.value = projectSlug
+      await nextTick()
+      const index = projectForms.value.findIndex((project) => project.slug === projectSlug)
+      document.querySelector(`[data-project-index="${index}"]`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+    }
   }
 }
 
@@ -220,6 +255,8 @@ onMounted(fetchContent)
           v-for="(proj, i) in projectForms"
           :key="i"
           class="project-card"
+          :class="{ 'project-card--highlight': highlightedProject === proj.slug }"
+          :data-project-index="i"
         >
           <div class="project-card-head">
             <strong class="proj-index">项目 {{ i + 1 }}</strong>
@@ -231,20 +268,44 @@ onMounted(fetchContent)
               <input v-model="proj.name" type="text" placeholder="My Project" />
             </label>
             <label>
+              <span>项目标识</span>
+              <input v-model="proj.slug" type="text" placeholder="my-project" />
+            </label>
+            <label>
+              <span>状态</span>
+              <select v-model="proj.status">
+                <option v-for="status in PROJECT_STATUSES" :key="status" :value="status">
+                  {{ statusLabels[status] }}
+                </option>
+              </select>
+            </label>
+            <label>
+              <span>分类</span>
+              <select v-model="proj.category">
+                <option v-for="category in PROJECT_CATEGORIES" :key="category" :value="category">
+                  {{ categoryLabels[category] }}
+                </option>
+              </select>
+            </label>
+            <label>
+              <span>技术栈（逗号分隔）</span>
+              <input v-model="proj.stackText" type="text" placeholder="Vue, TypeScript, Node" />
+            </label>
+            <label>
               <span>演示链接</span>
-              <input v-model="proj.url" type="text" placeholder="https://..." />
+              <input v-model="proj.demoUrl" type="text" placeholder="https://..." />
             </label>
             <label>
-              <span>GitHub</span>
-              <input v-model="proj.github" type="text" placeholder="https://github.com/..." />
+              <span>代码仓库</span>
+              <input v-model="proj.repoUrl" type="text" placeholder="https://github.com/..." />
             </label>
-            <label>
-              <span>标签（逗号分隔）</span>
-              <input v-model="proj.tags" type="text" placeholder="Vue, TypeScript, Node" />
+            <label class="full">
+              <span>项目摘要</span>
+              <input v-model="proj.summary" type="text" placeholder="项目卡片上显示的一句话摘要" />
             </label>
             <label class="full">
               <span>项目描述</span>
-              <textarea v-model="proj.description" rows="3" placeholder="项目简介..."></textarea>
+              <textarea v-model="proj.description" rows="4" placeholder="背景、你的工作与最终结果"></textarea>
             </label>
           </div>
         </div>
@@ -451,6 +512,11 @@ onMounted(fetchContent)
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.project-card--highlight {
+  border-color: var(--c1);
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, .12);
 }
 
 .project-card-head {
